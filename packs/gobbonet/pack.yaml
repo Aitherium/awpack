@@ -4,6 +4,13 @@ summary: >-
   Run GobboNet's chat on an agent loop, with campaign memory scoped by who
   knows what, and character-card / lorebook import-export.
 runtime: awdk>=3.7.4
+# The command a reader actually types. Declared rather than inferred:
+# a pack runs INSIDE a runtime, so "how do I use it" has no answer a
+# generator could derive, and inventing one ships a command that does
+# not exist.
+install: |
+  pip install "awdk[memory]"
+  adk gobbonet
 needs: []
 extras: [memory]          # awm — the scoped store the campaign notes live in
 tools:
