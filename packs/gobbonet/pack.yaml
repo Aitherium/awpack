@@ -1,0 +1,16 @@
+id: gobbonet
+version: 0.1.0
+summary: >-
+  Run GobboNet's chat on an agent loop, with campaign memory scoped by who
+  knows what, and character-card / lorebook import-export.
+runtime: awdk>=3.7.4
+needs: []
+extras: [memory]          # awm — the scoped store the campaign notes live in
+tools:
+  - campaign_note         # record a durable fact at exactly one knowledge scope
+  - campaign_recall       # read what ONE character knows (theirs + world state)
+  - campaign_import_card  # a GobboNet character card -> scoped notes
+  - campaign_import_lorebook
+  - campaign_export_card  # what the harness knows -> a card, without leaking
+status: preview
+licence: proprietary
