@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=65.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "awpack"
+version = "0.1.0"
+description = "Install and manage agent packs from the shelf"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [{name = "AitherOS Contributors"}]
+
+dependencies = []
+
+[project.optional-dependencies]
+yaml = ["pyyaml>=6.0"]
+
+[project.scripts]
+awpack = "awpack.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["awpack"]
+
+[tool.setuptools.package-data]
+awpack = ["py.typed"]

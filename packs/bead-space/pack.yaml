@@ -1,0 +1,19 @@
+id: bead-space
+version: 0.1.0
+summary: >-
+  Agent companion for BeadSpace: an interactive D3 work graph rendered as a
+  tiny space universe. Provides system prompting for agents assisting BeadSpace use.
+runtime: awdk>=3.7.0
+install: |
+  # Download BeadSpace from https://github.com/wbern/bead-space
+  # or visit https://pages.bernting.se/bead-space/
+  # Then enable the adk companion:
+  pip install awdk
+  adk <your-command>  # Use adk with bead-space agents
+
+needs: []
+extras: []
+tools: []
+status: preview
+licence: MIT
+reason: Third-party application companion; BeadSpace is wbern's MIT project

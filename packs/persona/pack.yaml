@@ -1,0 +1,29 @@
+id: persona
+version: 0.1.0
+summary: >-
+  Desktop avatar bridge for Persona. Control a VRM avatar's state, animation,
+  voice, and audio via HTTP loopback — host-run only.
+runtime: awdk>=3.7.0
+install: |
+  # Download Persona from https://github.com/xikhar/persona
+  # Extract and run it locally on your desktop.
+  # Then enable persona support in adk:
+  pip install "awdk"
+  ADK_PERSONA=1 adk <your-command>
+
+  # Or set the env var for all adk sessions:
+  #   Windows: setx ADK_PERSONA 1
+  #   Linux:   export ADK_PERSONA=1 >> ~/.bashrc
+needs: []
+extras: []
+tools:
+  - persona_status      # Liveness check: is persona responding?
+  - persona_animate     # Trigger an animation (IDLE, GREETING, TALK, HAPPY, etc.)
+  - persona_set_character  # Switch to a different character
+  - persona_speak_state # Set the avatar's activity/speaking state
+  - persona_audio_level # Set the microphone or output audio level
+  - persona_mute_microphone  # Mute/unmute the microphone
+  - persona_mute_output # Mute/unmute the avatar's voice output
+status: preview
+licence: MIT
+reason: Third-party desktop app companion; Persona (avatar) is xikhar's MIT project

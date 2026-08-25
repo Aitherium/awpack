@@ -20,4 +20,4 @@ tools:
   - campaign_import_lorebook
   - campaign_export_card  # what the harness knows -> a card, without leaking
 status: preview
-licence: proprietary
+licence: MIT
