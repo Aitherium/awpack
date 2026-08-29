@@ -25,5 +25,5 @@ tools:
   - persona_mute_microphone  # Mute/unmute the microphone
   - persona_mute_output # Mute/unmute the avatar's voice output
 status: preview
-licence: MIT
+licence: proprietary
 reason: Third-party desktop app companion; Persona (avatar) is xikhar's MIT project

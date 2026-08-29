@@ -15,5 +15,5 @@ needs: []
 extras: []
 tools: []
 status: preview
-licence: MIT
+licence: proprietary
 reason: Third-party application companion; BeadSpace is wbern's MIT project
