@@ -1,0 +1,17 @@
+{
+  "schemaVersion": "1",
+  "name": "awpack",
+  "description": "First-party agent packs — the ones we build, versioned and installable on their own.",
+  "url": "https://aitherium.github.io/awpack/",
+  "repository": "https://github.com/Aitherium/awpack",
+  "kind": "corpus",
+  "status": "public",
+  "adopt": "Install one pack and run it. Each carries its own manifest, licence and version, so taking one costs you nothing else.",
+  "pairs_with": [
+    "awdk",
+    "awskills",
+    "awsh",
+    "gobbonet-agentic"
+  ],
+  "includes": []
+}
