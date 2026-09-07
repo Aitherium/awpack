@@ -4,8 +4,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>awpack — First-party agent packs — the ones we build, versioned and installable on their own.</title>
-<meta name="description" content="First-party agent packs — the ones we build, versioned and installable on their own.">
+<title>gobbonet-agentic — GobboNet campaigns with a real agent brain — scoped memory, graph recall.</title>
+<meta name="description" content="GobboNet campaigns with a real agent brain — scoped memory, graph recall.">
 <style>
   :root{
     --bg:#fbfbfa; --panel:#fff; --ink:#16161d; --dim:#5c5c6b; --line:#e4e4e8;
@@ -64,30 +64,30 @@
 
 <div class="wrap">
 <header>
-  <span class="pill">corpus · git clone https://github.com/Aitherium/awpack</span>
-  <h1>awpack</h1>
-  <p class="tag">First-party agent packs — the ones we build, versioned and installable on their own.</p>
+  <span class="pill">tool · pip install awdk</span>
+  <h1>gobbonet-agentic</h1>
+  <p class="tag">GobboNet campaigns with a real agent brain — scoped memory, graph recall.</p>
 </header>
 
 <h2>The problem</h2>
-<p>A pack bundled into the SDK inherits the SDK&#x27;s licence and the SDK&#x27;s release cadence. That is backwards in both directions: a proprietary pack blocks the SDK&#x27;s public publish (measured — the adk sync gate aborts on exactly this and names it), and a good pack cannot ship a fix without an SDK release. Packs and the runtime that loads them are different products with different audiences.</p>
-<div class="swap"><div class="card"><div class="l">instead of trusting</div>that the pack you want shipped inside somebody&#x27;s SDK, under whatever licence that SDK happens to carry</div><div class="card"><div class="l">you check</div>the pack as its own versioned artifact, with its own licence, that any agent runtime can install</div></div>
+<p>Long roleplay campaigns decay: the model loops, forgets what each character knows, and the only fix is a human curating notes by hand. Per-NPC knowledge scoping is exactly the memory-boundary problem agents already have.</p>
+<div class="swap"><div class="card"><div class="l">instead of trusting</div>the model to keep a 300-message campaign coherent by itself</div><div class="card"><div class="l">you check</div>campaign facts recalled from scoped memory you can list and edit</div></div>
 <h2>Adopt it</h2>
-<pre><code>git clone https://github.com/Aitherium/awpack</code></pre>
-<p>Install one pack and run it. Each carries its own manifest, licence and version, so taking one costs you nothing else.</p>
+<pre><code>pip install awdk</code></pre>
+<p>Run one GobboNet campaign where the harness, not the human, keeps the notes.</p>
 
 <h2>Pairs with</h2>
-<p class="pairs"><a href="https://aitherium.github.io/awdk/">awdk</a><a href="https://aitherium.github.io/awskills/">awskills</a><a href="https://aitherium.github.io/awsh/">awsh</a><a href="https://aitherium.github.io/gobbonet-agentic/">gobbonet-agentic</a></p>
+<p class="pairs"><a href="https://aitherium.github.io/awdk/">awdk</a><a href="https://aitherium.github.io/awm/">awm</a></p>
 <p style="color:var(--dim);font-size:.9rem">Pairing is composition, never dependency —
-awpack installs and runs on its own.</p>
+gobbonet-agentic installs and runs on its own.</p>
 
 <h2>The rest of the Aither World</h2>
 <p>Every brick below is live, drawn from that repository's own published manifest.</p>
-<div id="aither-constellation" data-active="awpack"></div>
+<div id="aither-constellation" data-active="gobbonet-agentic"></div>
 <script src="aither-constellation.js" defer></script>
 
 <footer>
-  <a href="https://github.com/Aitherium/awpack">Source</a>
+  <a href="https://github.com/Aitherium/gobbonet-agentic">Source</a>
   <a href="aither-manifest.json">Manifest</a>
   <a href="https://aitherium.github.io/">The Aither World</a>
   <div style="margin-top:.8rem">Generated from the ecosystem registry. Edit the

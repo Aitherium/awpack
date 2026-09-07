@@ -1,0 +1,15 @@
+{
+  "schemaVersion": "1",
+  "name": "gobbonet-agentic",
+  "description": "GobboNet campaigns with a real agent brain — scoped memory, graph recall.",
+  "url": "https://aitherium.github.io/gobbonet-agentic/",
+  "repository": "https://github.com/Aitherium/gobbonet-agentic",
+  "kind": "tool",
+  "status": "public",
+  "adopt": "Run one GobboNet campaign where the harness, not the human, keeps the notes.",
+  "pairs_with": [
+    "awdk",
+    "awm"
+  ],
+  "includes": []
+}
