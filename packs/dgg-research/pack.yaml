@@ -7,10 +7,17 @@ summary: >-
 runtime: awdk>=3.7.4
 # The command a reader actually types. A pack runs INSIDE a runtime, so "how do
 # I use it" has no answer a generator could derive.
+# Every command here is one that EXISTS. There is deliberately no
+# `adk dgg-research` subcommand: `adk gobbonet` is one because that pack ships
+# its own server, and inventing a matching verb for this pack would advertise a
+# command the runtime cannot answer -- the failure reads as the pack being
+# broken rather than as the command being fictional. The tools activate through
+# the tool-pack loader, which already scans adk/toolpacks/, so `adk chat` has
+# them with no extra step.
 install: |
   pip install "awdk[memory]"
-  adk dgg-research --onboard      # picks the brain this machine can run
-  adk dgg-research
+  python -m adk.toolpacks.dgg_research.onboard   # which brain this host runs, and why
+  adk chat                                       # the five tools are registered
 needs: []
 extras: [memory]
 tools:
@@ -21,8 +28,8 @@ tools:
   - corpus_null        # a null, with the corpus and window that bound it
 # No hosted model anywhere. llama.cpp on a CPU is the floor, a GPU is the same
 # pack with a bigger brain, and an endpoint the operator already pays for wins
-# over both. `adk dgg-research --onboard` reads the host and says which it
-# picked and why; it never falls back to somebody's cloud silently, because a
+# over both. `python -m adk.toolpacks.dgg_research.onboard` reads the host and
+# says which it picked and why; it never falls back to a cloud silently, because a
 # private corpus quietly leaving the building is the one failure here that
 # cannot be walked back.
 inference:

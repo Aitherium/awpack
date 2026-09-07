@@ -6,9 +6,14 @@ It works an evidence base the way the people who build one actually work: resolv
 
 ```bash
 pip install "awdk[memory]"
-adk dgg-research --onboard     # reads this machine, picks the brain, tells you which
-adk dgg-research
+python -m adk.toolpacks.dgg_research.onboard   # reads this machine, picks the brain, says which
+adk chat                                       # the five tools are already registered
 ```
+
+There is no `adk dgg-research` subcommand, on purpose. The tool-pack loader
+already scans `adk/toolpacks/`, so the tools are on the agent without one — and
+a verb the runtime cannot answer reads as the pack being broken rather than as
+the command being fictional.
 
 ## It runs on your hardware, not ours
 
@@ -20,7 +25,7 @@ There is no hosted-model assumption anywhere in this pack.
 | GPU | ≥ 13 GB usable VRAM | llama.cpp + Bonsai-27B |
 | CPU | anything else | llama.cpp + Bonsai-4B-Q1 |
 
-`--onboard` reads the host and prints the tier with the reason it chose it. A GPU it cannot query is reported as **unknown**, never as absent — those two lead to opposite correct actions, and telling you that you have no GPU when the query merely failed sends you to fix the wrong thing.
+`onboard` reads the host and prints the tier with the reason it chose it. A GPU it cannot query is reported as **unknown**, never as absent — those two lead to opposite correct actions, and telling you that you have no GPU when the query merely failed sends you to fix the wrong thing.
 
 It never falls back to a hosted API. If nothing local loads and you declared no endpoint, it stops and says so. A private corpus quietly leaving the building because the local model would not load is the one failure here that cannot be walked back.
 
