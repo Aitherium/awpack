@@ -1,0 +1,33 @@
+id: dgg-research
+version: 0.1.0
+summary: >-
+  A research agent for a documentary record: resolve people to actors before
+  asserting anything about them, quote verbatim before interpreting, and record
+  a null with the corpus it came from.
+runtime: awdk>=3.7.4
+# The command a reader actually types. A pack runs INSIDE a runtime, so "how do
+# I use it" has no answer a generator could derive.
+install: |
+  pip install "awdk[memory]"
+  adk dgg-research --onboard      # picks the brain this machine can run
+  adk dgg-research
+needs: []
+extras: [memory]
+tools:
+  - actor_resolve      # is this person already in the record? never writes
+  - actor_references   # every frame and artifact an actor appears in
+  - evidence_push      # an action, against the artifact it came from
+  - mention_verify     # carry a HUMAN's confirmation; never make one
+  - corpus_null        # a null, with the corpus and window that bound it
+# No hosted model anywhere. llama.cpp on a CPU is the floor, a GPU is the same
+# pack with a bigger brain, and an endpoint the operator already pays for wins
+# over both. `adk dgg-research --onboard` reads the host and says which it
+# picked and why; it never falls back to somebody's cloud silently, because a
+# private corpus quietly leaving the building is the one failure here that
+# cannot be walked back.
+inference:
+  floor: {backend: llamacpp, model: Bonsai-4B-Q1, requires_gpu: false, ram_gb: 2}
+  preferred: {backend: llamacpp, model: Bonsai-27B, requires_gpu: true, vram_gb: 13}
+  byo: any OpenAI-shaped endpoint
+status: preview
+licence: proprietary
