@@ -31,6 +31,7 @@
     { id: "awrun", label: "awrun", blurb: "A priority-aware queue and dispatcher for..." },
     { id: "awgraph", label: "awgraph", blurb: "A semantic code graph for agents — AST +..." },
     { id: "awgit", label: "awgit", blurb: "Semantic version control on top of git —..." },
+    { id: "awdelphi", label: "awdelphi", blurb: "Anonymous multi-round expert panels — a..." },
     { id: "awtoll", label: "awtoll", blurb: "What every tool call costs you in context,..." },
     { id: "awseal", label: "awseal", blurb: "Sign an artifact so a stranger can verify it" },
     { id: "awshare", label: "awshare", blurb: "Publish an artifact and fetch it back verified" },
@@ -42,7 +43,9 @@
     { id: "awnboard", label: "awnboard", blurb: "A front gate you can put in front of..." },
     { id: "awnix", label: "awnix", blurb: "A Linux you can hand to an agent — immutable..." },
     { id: "awrecover", label: "awrecover", blurb: "Labelled snapshots with an all-or-nothing..." },
+    { id: "awstorage", label: "awstorage", blurb: "Every drive on every node, indexed,..." },
     { id: "awrelay", label: "awrelay", blurb: "Portable agent messaging — findings, alerts,..." },
+    { id: "awask", label: "awask", blurb: "Your agent asks you a question — and acts on..." },
     { id: "awmail", label: "awmail", blurb: "Give an agent an email address — send, and..." },
     { id: "awnet", label: "awnet", blurb: "The agentic web — agents host a mesh, and..." },
     { id: "awfind", label: "awfind", blurb: "A portable search client — query, results,..." },
@@ -50,6 +53,7 @@
     { id: "awknowledge", label: "awknowledge", blurb: "How to run a coding agent so the result..." },
     { id: "gobbonet-agentic", label: "gobbonet-agentic", blurb: "GobboNet campaigns with a real agent brain —..." },
     { id: "aitherkvcache", label: "aitherkvcache", blurb: "Near-optimal KV cache quantization for LLM..." },
+    { id: "awrtifact", label: "awrtifact", blurb: "Deliberately chunk artifacts into GitHub..." },
     { id: "AitherZero", label: "AitherZero", blurb: "PowerShell 7+ automation framework —..." },
     { id: "AitherConnect", label: "AitherConnect", blurb: "Browser extension — federated AI search, page..." },
     { id: "awreason", label: "awreason", blurb: "A portable reasoning client — sessions,..." },
@@ -57,9 +61,14 @@
     { id: "awprism", label: "awprism", blurb: "Turn a failure into ranked hypotheses — and..." },
     { id: "awrepl", label: "awrepl", blurb: "A REPL an agent can actually use — state that..." },
     { id: "awresearch", label: "awresearch", blurb: "Ask a research question, get a cited report..." },
+    { id: "awfocus", label: "awfocus", blurb: "See, search and steer every Claude session..." },
+    { id: "awgym", label: "awgym", blurb: "An ARC training gym — a game a world model..." },
     { id: "awpredict", label: "awpredict", blurb: "Predict what your environment does next, and..." },
     { id: "awsh", label: "awsh", blurb: "Your terminal answers you -- type a question..." },
-    { id: "awkno", label: "awkno", blurb: "The man page for the Aither World — every..." }
+    { id: "awkno", label: "awkno", blurb: "The man page for the Aither World — every..." },
+    { id: "awembed", label: "awembed", blurb: "Train an embedding model that knows your..." },
+    { id: "awtax", label: "awtax", blurb: "Turn any tax PDF -- returns, W-2, 1099,..." },
+    { id: "awsettings", label: "awsettings", blurb: "Your agent's permissions and config,..." }
   ];
 
   var CSS = [
