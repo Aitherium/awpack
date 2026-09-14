@@ -5,7 +5,7 @@
   "url": "https://aitherium.github.io/awpack/",
   "repository": "https://github.com/Aitherium/awpack",
   "kind": "corpus",
-  "status": "no-pages",
+  "status": "public",
   "adopt": "Install one pack and run it. Each carries its own manifest, licence and version, so taking one costs you nothing else.",
   "pairs_with": [
     "awdk",
@@ -16,12 +16,12 @@
   "includes": [],
   "metrics": {
     "files": {
-      "value": 21,
-      "as_of": "2026-09-12T08:36:19-07:00"
+      "value": 24,
+      "as_of": "2026-09-13T18:22:41-07:00"
     },
     "tests": {
       "value": 0,
-      "as_of": "2026-09-12T08:36:19-07:00"
+      "as_of": "2026-09-13T18:22:41-07:00"
     }
   }
 }
