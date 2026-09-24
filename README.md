@@ -73,6 +73,14 @@ git clone https://github.com/Aitherium/awpack
 adk pack install ./awpack/packs/<id>      # or point your runtime at the dir
 ```
 
+Or from the wheel, which carries the same shelf as package data:
+
+```bash
+pip install awpack
+awpack list                      # AWPACK_SHELF=<dir> points it at another shelf
+awpack install <id>
+```
+
 ## What is here so far
 
 | pack | status | what it is |

@@ -19,9 +19,14 @@ yaml = ["pyyaml>=6.0"]
 [project.scripts]
 awpack = "awpack.cli:main"
 
-[tool.setuptools.packages.find]
-where = ["."]
-include = ["awpack"]
+# The shelf ships INSIDE the wheel as `awpack/packs/**` (w1b-19-05): the source
+# tree keeps packs/ at the project root, and package-dir maps it under the
+# package so `pip install awpack && awpack list` finds the same packs a clone does.
+[tool.setuptools]
+packages = ["awpack", "awpack.packs"]
+
+[tool.setuptools.package-dir]
+"awpack.packs" = "packs"
 
 [tool.setuptools.package-data]
-awpack = ["py.typed"]
+"awpack.packs" = ["**/*"]

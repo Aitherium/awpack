@@ -181,24 +181,97 @@ def _parse_version_req(req: str) -> tuple[str, str]:
     return req, ""
 
 
-def _check_runtime(runtime_req: str) -> tuple[bool, str]:
-    """Check if runtime requirement is met.
+# The runtime check reads DISTRIBUTION metadata, never __import__: a pip name is
+# not an import name (awdk imports as `adk`), so `__import__("awdk")` refused
+# every pack on a machine with awdk 3.8.24 installed (w1b-19-04).
 
-    Returns (satisfied: bool, message: str describing what is/isn't available).
-    Simplistic: only checks if the package is importable, not version.
+
+def _version_tuple(v: str) -> tuple:
+    """'3.8.24' -> (3, 8, 24); stops at the first non-numeric segment."""
+    out = []
+    for part in v.strip().split("."):
+        num = ""
+        for ch in part:
+            if not ch.isdigit():
+                break
+            num += ch
+        if not num:
+            break
+        out.append(int(num))
+        if len(num) != len(part):
+            break
+    return tuple(out)
+
+
+def _version_satisfies(installed: str, spec: str) -> bool | None:
+    """Does `installed` satisfy `spec` (e.g. '>=3.7.4')? None = cannot judge."""
+    try:
+        from packaging.specifiers import InvalidSpecifier, SpecifierSet
+        from packaging.version import InvalidVersion, Version
+        try:
+            return Version(installed) in SpecifierSet(spec)
+        except (InvalidSpecifier, InvalidVersion):
+            return None
+    except ImportError:
+        pass
+    for op in (">=", "<=", "==", "!=", "~=", ">", "<"):
+        if spec.startswith(op):
+            want = _version_tuple(spec[len(op):])
+            have = _version_tuple(installed)
+            if not want or not have:
+                return None
+            n = max(len(want), len(have))
+            have_p = have + (0,) * (n - len(have))
+            want_p = want + (0,) * (n - len(want))
+            if op == "~=":
+                prefix = want[:-1] if len(want) > 1 else want
+                return have_p >= want_p and have[:len(prefix)] == prefix
+            return {
+                ">=": have_p >= want_p, "<=": have_p <= want_p,
+                "==": have_p == want_p, "!=": have_p != want_p,
+                ">": have_p > want_p, "<": have_p < want_p,
+            }[op]
+    return None
+
+
+def _installed_version(dist_name: str) -> str | None:
+    """Installed version of a DISTRIBUTION (pip name), or None if absent."""
+    from importlib import metadata
+    for name in (dist_name, dist_name.replace("-", "_"), dist_name.replace("_", "-")):
+        try:
+            return metadata.version(name)
+        except metadata.PackageNotFoundError:
+            continue
+    return None
+
+
+def _check_runtime(runtime_req: str) -> tuple[bool, str]:
+    """Check if a runtime requirement like 'awdk>=3.7.4' is met.
+
+    Returns (satisfied, message). Resolves the DISTRIBUTION via
+    importlib.metadata (a pip name is not an import name) and checks the version
+    specifier. A version that cannot be parsed is refused -- an unverified
+    runtime is not a satisfied one.
     """
     if not runtime_req.strip():
         return True, "no runtime requirement"
     pkg_name, version_spec = _parse_version_req(runtime_req)
+    if not version_spec:
+        pkg_name = runtime_req.strip()
     if not pkg_name:
         return True, "unparseable requirement (ignored)"
-    try:
-        __import__(pkg_name.replace("-", "_"))
-        if version_spec:
-            return True, f"{pkg_name} is installed (version check skipped)"
-        return True, f"{pkg_name} is installed"
-    except ImportError:
+    installed = _installed_version(pkg_name)
+    if installed is None:
         return False, f"{pkg_name} not found (required: {runtime_req})"
+    if not version_spec:
+        return True, f"{pkg_name} {installed} is installed"
+    ok = _version_satisfies(installed, version_spec)
+    if ok is None:
+        return False, (f"{pkg_name} {installed} is installed but {version_spec!r} "
+                       f"could not be judged (required: {runtime_req})")
+    if not ok:
+        return False, f"{pkg_name} {installed} does not satisfy {runtime_req}"
+    return True, f"{pkg_name} {installed} satisfies {runtime_req}"
 
 
 def cmd_install(registry: PackRegistry, pack_id: str) -> int:
@@ -447,6 +520,29 @@ def _self_test() -> int:
         shutil.rmtree(tmp, ignore_errors=True)
 
 
+def resolve_shelf(env: dict | None = None, here: Path | None = None) -> Path:
+    """Where the pack shelf lives.
+
+    1. ``AWPACK_SHELF`` -- an explicit shelf (a clone, a mirror, a test dir).
+    2. ``<package>/packs`` -- the shelf shipped INSIDE the wheel as package data.
+    3. ``<package>/../packs`` -- a source checkout (``awpack/packs``).
+
+    Before this, only (3) existed, so ``pip install awpack`` looked for
+    ``site-packages/packs``, which no wheel contains, and ``awpack list`` said
+    "no packs on the shelf" (w1b-19-05).
+    """
+    import os
+    env = os.environ if env is None else env
+    explicit = (env.get("AWPACK_SHELF") or "").strip()
+    if explicit:
+        return Path(explicit).expanduser()
+    pkg = (here or Path(__file__).resolve().parent)
+    bundled = pkg / "packs"
+    if bundled.is_dir():
+        return bundled
+    return pkg.parent / "packs"
+
+
 def main() -> int:
     """Main entry point."""
     if "--self-test" in sys.argv:
@@ -459,9 +555,7 @@ def main() -> int:
         )
         return 1
 
-    # Determine shelf location (relative to this file, go up to awpack root)
-    this_dir = Path(__file__).resolve().parent.parent
-    shelf = this_dir / "packs"
+    shelf = resolve_shelf()
 
     registry = PackRegistry(shelf)
     registry.discover()
