@@ -2,11 +2,26 @@
 """awpack: install and manage agent packs from the shelf.
 
 CONTRACT:
-  awpack list                 list packs on the shelf
-  awpack show <id>            render manifest for a human
-  awpack install <id>         resolve deps, check runtime, install
-  awpack verify <id>          is the pack installed and loadable?
-  awpack --self-test          prove every rule can still fail; every happy path works
+  awpack list [--json]                        list packs on the shelf
+  awpack show <id>                            render manifest for a human
+  awpack install <id> [--dest DIR] [--replace] [--json]
+                                              resolve deps, check runtime, install
+  awpack verify <id> [--dest DIR] [--json]    is the pack installed and loadable?
+  awpack remove <id> [--dest DIR] [--json]    uninstall a pack from the install dir
+  awpack --self-test                          prove every rule can still fail
+  awpack --list-verbs                         one verb per line
+
+Install dir: --dest DIR, else $AWPACK_INSTALL_DIR, else ~/.aither/agents. An awnix
+appliance installs packs to /var/lib/awnix/packs through `awnix component` (the
+`pack` backend), which passes --dest. `install --ref <commit>` is accepted and
+ignored: the pin is the shelf the caller put on AWPACK_SHELF (a baked copy at the
+locked commit), not something awpack fetches. `install --replace` swaps an
+installed copy for the shelf's in one rename (the old copy is restored if the swap
+fails) -- that is how `awnix component sync` moves a pack to a new lock pin after
+`bootc upgrade` / `bootc rollback` changes the baked shelf.
+
+--json prints ONE object on stdout: {ok, op, id?, dest?, packs?, detail}; human
+messages go to stderr so a caller can parse stdout unconditionally.
 
 Exit codes:
   0: success (list, show succeeded; install/verify completed; self-test passed)
@@ -16,10 +31,14 @@ Exit codes:
 
 from __future__ import annotations
 
+import json
+import os
 import shutil
 import sys
 import tempfile
 from pathlib import Path
+
+VERBS = ("list", "show", "install", "verify", "remove")
 
 try:
     import yaml
@@ -124,15 +143,43 @@ class PackRegistry:
         return self.packs
 
 
-def cmd_list(registry: PackRegistry) -> int:
+def install_root(dest: str | Path | None = None, env: dict | None = None) -> Path:
+    """Where packs are installed: --dest, else AWPACK_INSTALL_DIR, else ~/.aither/agents."""
+    if dest:
+        return Path(dest).expanduser()
+    env = os.environ if env is None else env
+    explicit = (env.get("AWPACK_INSTALL_DIR") or "").strip()
+    if explicit:
+        return Path(explicit).expanduser()
+    return Path.home() / ".aither" / "agents"
+
+
+def _emit(as_json: bool, payload: dict) -> None:
+    """Print the one JSON object a --json caller parses (stdout only)."""
+    if as_json:
+        print(json.dumps(payload, sort_keys=True, default=str))
+
+
+def cmd_list(registry: PackRegistry, as_json: bool = False) -> int:
     """List all packs on the shelf."""
     if registry.errors:
         for err in registry.errors:
             print(f"  {err}", file=sys.stderr)
+        _emit(as_json, {"ok": False, "op": "list", "packs": [],
+                        "detail": "; ".join(registry.errors)})
         return 2
     if not registry.packs:
         print("no packs on the shelf", file=sys.stderr)
+        _emit(as_json, {"ok": False, "op": "list", "packs": [],
+                        "detail": f"no packs on the shelf {registry.shelf}"})
         return 2
+    if as_json:
+        _emit(True, {"ok": True, "op": "list", "detail": "", "packs": [
+            {"id": pid, "version": str(m.get("version", "")),
+             "status": str(m.get("status", "")),
+             "summary": str(m.get("summary", ""))}
+            for pid, m in sorted(registry.packs.items())]})
+        return 0
     print("Packs on shelf:\n")
     for pack_id, manifest in sorted(registry.packs.items()):
         version = manifest.get("version", "?")
@@ -274,68 +321,101 @@ def _check_runtime(runtime_req: str) -> tuple[bool, str]:
     return True, f"{pkg_name} {installed} satisfies {runtime_req}"
 
 
-def cmd_install(registry: PackRegistry, pack_id: str) -> int:
-    """Install a pack to ~/.aither/agents/<id>.
+def _refuse(as_json: bool, op: str, pack_id: str, dest: Path | None,
+            msg: str, rc: int) -> int:
+    """Report a refusal on stderr (and as JSON when asked) and return rc."""
+    print(msg, file=sys.stderr)
+    _emit(as_json, {"ok": False, "op": op, "id": pack_id,
+                    "dest": str(dest) if dest else "", "detail": msg})
+    return rc
+
+
+def cmd_install(registry: PackRegistry, pack_id: str,
+                dest: str | Path | None = None, as_json: bool = False,
+                replace: bool = False) -> int:
+    """Install a pack to <install_root>/<id>.
 
     Steps:
     1. Find pack manifest
     2. Check runtime requirement
     3. Check dependencies (needs)
     4. Create install dir if needed
-    5. Copy pack files
+    5. Copy pack files (to a temp sibling, then rename -- never a half copy)
     6. Print the install command from manifest
     """
+    agents_dir = install_root(dest)
     if registry.errors:
-        for err in registry.errors:
-            print(f"  {err}", file=sys.stderr)
-        return 2
+        return _refuse(as_json, "install", pack_id, agents_dir,
+                       "; ".join(registry.errors), 2)
     manifest = registry.get(pack_id)
     if not manifest:
-        print(f"pack not found: {pack_id!r}", file=sys.stderr)
-        return 1
+        return _refuse(as_json, "install", pack_id, agents_dir,
+                       f"pack not found: {pack_id!r}", 1)
 
     # Check runtime requirement
     runtime_req = manifest.get("runtime", "").strip()
     if runtime_req:
         satisfied, msg = _check_runtime(runtime_req)
         if not satisfied:
-            print(f"runtime not satisfied: {msg}", file=sys.stderr)
-            return 1
+            return _refuse(as_json, "install", pack_id, agents_dir,
+                           f"runtime not satisfied: {msg}", 1)
 
     # Check dependencies
     needs = manifest.get("needs", [])
     if isinstance(needs, str):
         needs = [needs]
-    unmet = []
-    for need_id in needs:
-        if need_id not in registry.packs:
-            unmet.append(need_id)
+    unmet = [n for n in needs if n not in registry.packs]
     if unmet:
-        print(f"unmet dependencies: {', '.join(unmet)}", file=sys.stderr)
-        return 1
+        return _refuse(as_json, "install", pack_id, agents_dir,
+                       f"unmet dependencies: {', '.join(unmet)}", 1)
 
-    # Determine install location
-    agents_dir = Path.home() / ".aither" / "agents"
     install_dir = agents_dir / pack_id
-    if install_dir.exists():
-        print(
-            f"already installed at {install_dir}; "
-            f"remove it manually if you need to reinstall",
-            file=sys.stderr,
-        )
-        return 1
+    if install_dir.exists() and not replace:
+        return _refuse(as_json, "install", pack_id, agents_dir,
+                       f"already installed at {install_dir}; "
+                       f"`awpack remove {pack_id}` first, or pass --replace", 1)
+    if install_dir.exists() and not (install_dir / "pack.yaml").is_file():
+        # --replace swaps a PACK, never someone's unrelated folder
+        return _refuse(as_json, "install", pack_id, agents_dir,
+                       f"{install_dir} exists but is not a pack; refusing to replace", 1)
 
-    # Create the install directory and copy pack files
+    tmp_dir = agents_dir / f".{pack_id}.installing"
+    old_dir = agents_dir / f".{pack_id}.replaced"
+    moved_old = False
     try:
         agents_dir.mkdir(parents=True, exist_ok=True)
-        pack_dir = manifest["_dir"]
-        shutil.copytree(pack_dir, install_dir)
+        if tmp_dir.exists():
+            shutil.rmtree(tmp_dir)
+        shutil.copytree(manifest["_dir"], tmp_dir)
+        if install_dir.exists():
+            if old_dir.exists():
+                shutil.rmtree(old_dir)
+            os.replace(install_dir, old_dir)
+            moved_old = True
+        os.replace(tmp_dir, install_dir)
     except (OSError, PermissionError) as e:
-        print(f"install failed: {e}", file=sys.stderr)
-        return 1
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+        if moved_old and not install_dir.exists():
+            try:
+                os.replace(old_dir, install_dir)
+            except OSError as e2:
+                # The restore failed too: the previous version still sits at old_dir.
+                # Say where, so an operator can move it back by hand.
+                print(f"awpack: could not restore the previous {pack_id} from {old_dir}: {e2}",
+                      file=sys.stderr)
+        return _refuse(as_json, "install", pack_id, agents_dir,
+                       f"install failed: {e}", 1)
+    if moved_old:
+        shutil.rmtree(old_dir, ignore_errors=True)
 
-    # Print the install command from manifest (user must run it)
     install_cmd = manifest.get("install", "").strip()
+    if as_json:
+        _emit(True, {"ok": True, "op": "install", "id": pack_id,
+                     "dest": str(install_dir),
+                     "version": str(manifest.get("version", "")),
+                     "next": install_cmd, "detail": ""})
+        return 0
+    # Print the install command from manifest (user must run it)
     print(f"installed {pack_id} to {install_dir}\n")
     if install_cmd:
         print("Next, run:")
@@ -346,48 +426,86 @@ def cmd_install(registry: PackRegistry, pack_id: str) -> int:
     return 0
 
 
-def cmd_verify(registry: PackRegistry, pack_id: str) -> int:
+def cmd_remove(registry: PackRegistry, pack_id: str,
+               dest: str | Path | None = None, as_json: bool = False) -> int:
+    """Remove an installed pack from <install_root>/<id>.
+
+    Judged against the INSTALL dir, not the shelf: a pack dropped from a newer
+    shelf must still be removable. Refuses (1) when it is not installed, and
+    refuses a directory that is not a pack (no pack.yaml, or a different id) so a
+    wrong --dest never deletes someone's unrelated folder.
+    """
+    agents_dir = install_root(dest)
+    if not pack_id or "/" in pack_id or "\\" in pack_id or pack_id in (".", ".."):
+        return _refuse(as_json, "remove", pack_id, agents_dir,
+                       f"invalid pack id: {pack_id!r}", 1)
+    install_dir = agents_dir / pack_id
+    manifest_file = install_dir / "pack.yaml"
+    if not install_dir.exists():
+        return _refuse(as_json, "remove", pack_id, agents_dir,
+                       f"pack {pack_id!r} not installed (no {install_dir})", 1)
+    try:
+        installed = _load_manifest(manifest_file.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as e:
+        return _refuse(as_json, "remove", pack_id, agents_dir,
+                       f"{install_dir} is not an installed pack ({e}); refusing", 1)
+    if installed.get("id") != pack_id:
+        return _refuse(as_json, "remove", pack_id, agents_dir,
+                       f"{install_dir} declares id {installed.get('id')!r}; refusing", 1)
+    trash = agents_dir / f".{pack_id}.removing"
+    try:
+        if trash.exists():
+            shutil.rmtree(trash)
+        os.replace(install_dir, trash)
+        shutil.rmtree(trash)
+    except (OSError, PermissionError) as e:
+        return _refuse(as_json, "remove", pack_id, agents_dir,
+                       f"remove failed: {e}", 1)
+    if as_json:
+        _emit(True, {"ok": True, "op": "remove", "id": pack_id,
+                     "dest": str(install_dir), "detail": ""})
+    else:
+        print(f"removed {pack_id} from {install_dir}")
+    return 0
+
+
+def cmd_verify(registry: PackRegistry, pack_id: str,
+               dest: str | Path | None = None, as_json: bool = False) -> int:
     """Verify pack is installed and loadable.
 
     Returns 0 if pack.yaml exists at expected location, 1 if not.
     """
+    agents_dir = install_root(dest)
     if registry.errors:
-        for err in registry.errors:
-            print(f"  {err}", file=sys.stderr)
-        return 2
+        return _refuse(as_json, "verify", pack_id, agents_dir,
+                       "; ".join(registry.errors), 2)
     manifest = registry.get(pack_id)
     if not manifest:
-        print(f"pack not found in shelf: {pack_id!r}", file=sys.stderr)
-        return 1
+        return _refuse(as_json, "verify", pack_id, agents_dir,
+                       f"pack not found in shelf: {pack_id!r}", 1)
 
-    # Check if it's installed
-    agents_dir = Path.home() / ".aither" / "agents"
     install_dir = agents_dir / pack_id
     manifest_file = install_dir / "pack.yaml"
     if not manifest_file.exists():
-        print(
-            f"pack {pack_id!r} not installed "
-            f"(expected at {manifest_file})",
-            file=sys.stderr,
-        )
-        return 1
+        return _refuse(as_json, "verify", pack_id, agents_dir,
+                       f"pack {pack_id!r} not installed (expected at {manifest_file})", 1)
 
-    # Try to parse it
     try:
         installed = _load_manifest(manifest_file.read_text(encoding="utf-8"))
     except Exception as e:
-        print(f"installed pack.yaml corrupted: {e}", file=sys.stderr)
-        return 1
+        return _refuse(as_json, "verify", pack_id, agents_dir,
+                       f"installed pack.yaml corrupted: {e}", 1)
 
-    # Verify it's the same pack
     if installed.get("id") != pack_id:
-        print(
-            f"installed pack id mismatch: "
-            f"expected {pack_id!r}, got {installed.get('id')!r}",
-            file=sys.stderr,
-        )
-        return 1
+        return _refuse(as_json, "verify", pack_id, agents_dir,
+                       f"installed pack id mismatch: expected {pack_id!r}, "
+                       f"got {installed.get('id')!r}", 1)
 
+    if as_json:
+        _emit(True, {"ok": True, "op": "verify", "id": pack_id,
+                     "dest": str(install_dir),
+                     "version": str(installed.get("version", "")), "detail": ""})
+        return 0
     print(f"pack {pack_id!r} is installed and loadable")
     print(f"  location: {install_dir}")
     print(f"  version:  {installed.get('version', '?')}")
@@ -410,7 +528,6 @@ def _self_test() -> int:
             "version: 1.0.0\n"
             "summary: a test pack\n"
             "status: preview\n"
-            "runtime: sys\n"
             "install: echo 'test pack installed'\n"
             "needs: []\n",
             encoding="utf-8",
@@ -459,21 +576,86 @@ def _self_test() -> int:
         assert cmd_install(registry, "needs_missing") == 1
         # Test install — must refuse bad runtime
         assert cmd_install(registry, "bad_runtime") == 1
-        # Test install — good pack should try to install
-        # (but will fail if ~/.aither exists and is writable)
-        ret = cmd_install(registry, "test_pack")
-        if ret == 0:
-            # If it succeeded, verify it was installed
-            assert cmd_verify(registry, "test_pack") == 0
-            # Clean up
-            install_dir = Path.home() / ".aither" / "agents" / "test_pack"
-            shutil.rmtree(install_dir, ignore_errors=True)
-        # If ret==1, it's OK (install dir already exists or permission denied)
+        # Test install -- into a TEMP dest, never the caller's home
+        agents = tmp / "agents"
+        assert cmd_install(registry, "test_pack", dest=agents) == 0
+        assert cmd_verify(registry, "test_pack", dest=agents) == 0
+        assert (agents / "test_pack" / "pack.yaml").is_file()
+        # a second install refuses rather than overwriting
+        assert cmd_install(registry, "test_pack", dest=agents) == 1
+        # --replace swaps the installed copy for the shelf's (a new lock pin)
+        (agents / "test_pack" / "stale.txt").write_text("old", encoding="utf-8")
+        assert cmd_install(registry, "test_pack", dest=agents, replace=True) == 0
+        assert (agents / "test_pack" / "pack.yaml").is_file()
+        assert not (agents / "test_pack" / "stale.txt").exists(), "replace kept the old copy"
+        assert not (agents / ".test_pack.replaced").exists()
+        # --replace never deletes a directory that is not a pack
+        bogus = agents / "bad_runtime"
+        bogus.mkdir(parents=True)
+        (bogus / "keep.txt").write_text("x", encoding="utf-8")
+        reg_b = PackRegistry(shelf)
+        reg_b.discover()
+        reg_b.packs["bad_runtime"] = {**reg_b.packs["bad_runtime"], "runtime": ""}
+        assert cmd_install(reg_b, "bad_runtime", dest=agents, replace=True) == 1
+        assert (bogus / "keep.txt").is_file(), "replace deleted a non-pack dir"
+        shutil.rmtree(bogus)
 
-        # Test verify (not installed)
-        reg2 = PackRegistry(shelf)
-        reg2.discover()
-        assert cmd_verify(reg2, "test_pack") == 1
+        # DEST OVERRIDE: AWPACK_INSTALL_DIR steers the default, --dest beats it
+        env_dir = tmp / "env-agents"
+        assert install_root(None, {"AWPACK_INSTALL_DIR": str(env_dir)}) == env_dir
+        assert install_root(agents, {"AWPACK_INSTALL_DIR": str(env_dir)}) == agents
+        assert install_root(None, {}) == Path.home() / ".aither" / "agents"
+
+        # REMOVE ROUND-TRIP: remove, verify refuses, remove again refuses
+        assert cmd_remove(registry, "test_pack", dest=agents) == 0
+        assert not (agents / "test_pack").exists()
+        assert cmd_verify(registry, "test_pack", dest=agents) == 1
+        assert cmd_remove(registry, "test_pack", dest=agents) == 1
+        # remove refuses a directory that is not that pack, and path tricks
+        stray = agents / "not_a_pack"
+        stray.mkdir(parents=True)
+        (stray / "keep.txt").write_text("x", encoding="utf-8")
+        assert cmd_remove(registry, "not_a_pack", dest=agents) == 1
+        assert (stray / "keep.txt").is_file(), "remove deleted a non-pack dir"
+        assert cmd_remove(registry, "../agents", dest=agents) == 1
+
+        # JSON SHAPE: one object on stdout with ok/op/id/dest/detail
+        import contextlib
+        import io
+
+        def run_json(fn, *a, **kw):
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                rc = fn(*a, **kw)
+            return rc, json.loads(buf.getvalue())
+
+        rc, obj = run_json(cmd_install, registry, "test_pack", dest=agents, as_json=True)
+        assert rc == 0 and obj["ok"] is True and obj["op"] == "install"
+        assert obj["id"] == "test_pack" and obj["dest"].endswith("test_pack")
+        assert obj["version"] == "1.0.0"
+        rc, obj = run_json(cmd_verify, registry, "test_pack", dest=agents, as_json=True)
+        assert rc == 0 and obj["op"] == "verify" and obj["ok"] is True
+        rc, obj = run_json(cmd_remove, registry, "test_pack", dest=agents, as_json=True)
+        assert rc == 0 and obj == {"ok": True, "op": "remove", "id": "test_pack",
+                                   "dest": obj["dest"], "detail": ""}
+        rc, obj = run_json(cmd_remove, registry, "test_pack", dest=agents, as_json=True)
+        assert rc == 1 and obj["ok"] is False and obj["detail"]
+        rc, obj = run_json(cmd_list, registry, as_json=True)
+        assert rc == 0 and obj["op"] == "list"
+        assert {p["id"] for p in obj["packs"]} == {"test_pack", "needs_missing", "bad_runtime"}
+        rc, obj = run_json(cmd_install, registry, "bad_runtime", dest=agents, as_json=True)
+        assert rc == 1 and obj["ok"] is False and "runtime" in obj["detail"]
+
+        # argv plumbing: main() honours --dest and --json
+        rc, obj = run_json(main, ["install", "test_pack", "--dest", str(agents),
+                                  "--json", "--ref", "0" * 40], shelf=shelf)
+        assert rc == 0 and obj["ok"] and (agents / "test_pack").is_dir()
+        rc, obj = run_json(main, ["install", "test_pack", "--dest", str(agents),
+                                  "--json", "--replace"], shelf=shelf)
+        assert rc == 0 and obj["ok"], "main() must honour --replace"
+        rc, obj = run_json(main, ["remove", "test_pack", "--dest", str(agents),
+                                  "--json"], shelf=shelf)
+        assert rc == 0 and not (agents / "test_pack").exists()
 
         # Test empty shelf
         empty_shelf = tmp / "empty"
@@ -543,44 +725,70 @@ def resolve_shelf(env: dict | None = None, here: Path | None = None) -> Path:
     return pkg.parent / "packs"
 
 
-def main() -> int:
-    """Main entry point."""
-    if "--self-test" in sys.argv:
-        return _self_test()
+def _parse(argv: list[str]) -> tuple[list[str], dict]:
+    """Split argv into positionals and the flags this CLI knows."""
+    pos: list[str] = []
+    opts: dict = {"json": False, "dest": None, "ref": None, "replace": False}
+    it = iter(argv)
+    for a in it:
+        if a == "--json":
+            opts["json"] = True
+        elif a == "--replace":
+            opts["replace"] = True
+        elif a in ("--dest", "--ref"):
+            val = next(it, None)
+            if val is None:
+                raise ValueError(f"{a} needs a value")
+            opts[a[2:]] = val
+        elif a.startswith("--dest="):
+            opts["dest"] = a.split("=", 1)[1]
+        elif a.startswith("--ref="):
+            opts["ref"] = a.split("=", 1)[1]
+        else:
+            pos.append(a)
+    return pos, opts
 
-    if len(sys.argv) < 2:
-        print(
-            "usage: awpack {list,show,install,verify} [args]",
-            file=sys.stderr,
-        )
+
+def main(argv: list[str] | None = None, shelf: Path | None = None) -> int:
+    """Main entry point."""
+    argv = sys.argv[1:] if argv is None else argv
+    if "--self-test" in argv:
+        return _self_test()
+    if "--list-verbs" in argv:
+        for verb in VERBS:
+            print(verb)
+        return 0
+    try:
+        pos, opts = _parse(argv)
+    except ValueError as e:
+        print(str(e), file=sys.stderr)
+        return 1
+    if not pos:
+        print("usage: awpack {list,show,install,verify,remove} [id] "
+              "[--dest DIR] [--json]", file=sys.stderr)
         return 1
 
-    shelf = resolve_shelf()
-
-    registry = PackRegistry(shelf)
+    registry = PackRegistry(shelf or resolve_shelf())
     registry.discover()
 
-    cmd = sys.argv[1]
+    cmd, rest = pos[0], pos[1:]
+    as_json, dest = opts["json"], opts["dest"]
     if cmd == "list":
-        return cmd_list(registry)
-    elif cmd == "show":
-        if len(sys.argv) < 3:
-            print("usage: awpack show <pack-id>", file=sys.stderr)
-            return 1
-        return cmd_show(registry, sys.argv[2])
-    elif cmd == "install":
-        if len(sys.argv) < 3:
-            print("usage: awpack install <pack-id>", file=sys.stderr)
-            return 1
-        return cmd_install(registry, sys.argv[2])
-    elif cmd == "verify":
-        if len(sys.argv) < 3:
-            print("usage: awpack verify <pack-id>", file=sys.stderr)
-            return 1
-        return cmd_verify(registry, sys.argv[2])
-    else:
+        return cmd_list(registry, as_json=as_json)
+    if cmd not in VERBS:
         print(f"unknown command: {cmd!r}", file=sys.stderr)
         return 1
+    if not rest:
+        print(f"usage: awpack {cmd} <pack-id>", file=sys.stderr)
+        return 1
+    if cmd == "show":
+        return cmd_show(registry, rest[0])
+    if cmd == "install":
+        return cmd_install(registry, rest[0], dest=dest, as_json=as_json,
+                           replace=opts["replace"])
+    if cmd == "verify":
+        return cmd_verify(registry, rest[0], dest=dest, as_json=as_json)
+    return cmd_remove(registry, rest[0], dest=dest, as_json=as_json)
 
 
 if __name__ == "__main__":
