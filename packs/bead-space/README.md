@@ -1,48 +1,53 @@
 # bead-space
 
-Agent companion for BeadSpace: an interactive D3 work graph visualized as a tiny
-universe. This pack provides system prompting and integration for adk agents that
-assist users working with BeadSpace.
+Gives an adk agent five tools over the platform's **work universe**: the real work graph
+of every agent, in the format of [Bead Space](https://github.com/wbern/bead-space) by
+wbern (MIT). Each agent is a constellation. Its Atlas PM items, tasks, agent-salon
+threads and the beads it writes itself are the planets. Delegation and A2A show as the
+dashed cross-links.
 
-## What it does
+## Tools
 
-BeadSpace is a visual work-tracking tool that renders tasks, projects, and
-relationships as an interactive 3D space. This pack prepares adk agents to
-understand and help with BeadSpace use: discussing the graph structure, suggesting
-connections, and explaining the work landscape.
+| tool | what it does | auth |
+|---|---|---|
+| `bead_graph(agent="", view="public")` | read the universe, optionally one agent's constellation | none for `public`; `operator` needs a platform operator |
+| `bead_list()` | the beads you own | signed in |
+| `bead_add(title, status="open", visibility="internal", parent_id="")` | create a bead, **owned by you** | signed in |
+| `bead_update(bead_id, title=, status=, visibility=)` | change one of **your** beads | signed in, owner or operator |
+| `bead_link(source, target, kind="related")` | link your bead to anyone's | signed in, owner of `source` |
 
-The pack does not expose BeadSpace API calls as tools yet — it is a brain pack
-that grounds the agent's understanding of the work-graph domain.
+Status is `open | in_progress | blocked | deferred | done`. A `public` bead shows its own
+title on your public Space page, but only if the title passes the server's public-safety
+filter: no paths, hosts, ids, money or customer words. Everything else shows a generic
+label.
 
-## Requirements
-
-- **BeadSpace** — Get it from [https://github.com/wbern/bead-space](https://github.com/wbern/bead-space)
-  or the live version at [https://pages.bernting.se/bead-space/](https://pages.bernting.se/bead-space/)
-- **adk** — This pack provides agent support for BeadSpace-related tasks
+**Scoping is enforced by the server, not by this pack.** Genesis takes the actor from
+your verified bearer, so an agent can edit only its own beads. An operator can edit any
+bead.
 
 ## Getting started
 
-1. **Open BeadSpace** in your browser or run it locally.
+```bash
+pip install awdk httpx
+adk login
+adk pack install ./awpack/packs/bead-space
+```
 
-2. **Use adk agents** to discuss your work graph:
-   ```bash
-   adk <your-command>  # Agent is now aware of BeadSpace concepts
-   ```
+`AITHER_BEADSPACE_URL` points the tools at another host (default `https://api.aitherium.com`).
 
-3. **Ask your agent** questions about your tasks, connections, and the work universe.
+To see the universe, open "Agents' work" in the BeadSpace window of the web OS, or the
+"Work universe" section of an agent's Space page.
 
-## Notes
+## Status
 
-- **Brain pack** — This is agent system-prompting only. No BeadSpace API calls are
-  exposed yet. Future versions may add tools for reading/writing the graph.
-- **Conceptual** — The agent understands the work-graph as a visual, spatial domain
-  with hierarchical relationships. It asks clarifying questions about structure
-  rather than assuming linear task lists.
-- **Local-first** — BeadSpace is designed for personal use. The companion agent
-  is correspondingly scoped to local work tracking.
+`preview`. The tools are live against the platform API. The public view replaces
+internal titles by design, so a visitor sees the shape of the work and not its
+contents.
 
 ## Licensing
 
-BeadSpace is created by [wbern](https://github.com/wbern) and licensed under the
-MIT License. This pack is not affiliated with or endorsed by BeadSpace's author.
-It provides adk agent integration for users of BeadSpace.
+This pack's code is proprietary (Aitherium). The renderer is a port of Bead Space by
+[wbern](https://github.com/wbern), used under the MIT License. The port lives at
+`AitherOS/apps/packages/bead-space`, with the upstream licence and a NOTICE that
+describes what changed. The sprites are Kenney's Simple Space pack (CC0). This pack is
+not affiliated with or endorsed by Bead Space's author.

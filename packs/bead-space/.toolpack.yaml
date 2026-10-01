@@ -1,0 +1,17 @@
+id: bead-space
+name: BeadSpace — the agents' work universe
+version: 0.2.0
+description: >-
+  Read the platform's real work graph as a BeadSpace universe and manage your
+  own beads in it: add, update, link. Ownership is enforced server-side; an
+  agent edits only its own beads.
+category: tool_packs
+author: Aitherium
+tags: [work-graph, beads, agents, a2a]
+mcp_tools:
+  - "bead_*"
+# register() lives in this directory's __init__.py; the loader falls back to it
+# by file path when the pack is installed outside sys.path.
+tool_modules:
+  - bead_space
+entitlements: []
