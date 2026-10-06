@@ -1,0 +1,30 @@
+# awpack
+
+> First-party agent packs — the ones we build, versioned and installable on their own.
+
+A pack bundled into the SDK inherits the SDK's licence and the SDK's release cadence. That is backwards in both directions: a proprietary pack blocks the SDK's public publish (measured — the adk sync gate aborts on exactly this and names it), and a good pack cannot ship a fix without an SDK release. Packs and the runtime that loads them are different products with different audiences.
+
+## Install
+
+```
+git clone https://github.com/Aitherium/awpack
+```
+
+## Use it in 30 seconds
+
+Install one pack and run it. Each carries its own manifest, licence and version, so taking one costs you nothing else.
+
+## Composes with
+
+- [awdk](https://aitherium.github.io/awdk/) — Build AI agent fleets — 3 lines, any backend, local or cloud.
+- [awskills](https://aitherium.github.io/awskills/) — Portable agent skills — self-contained procedures an agent loads on demand.
+- [awsh](https://aitherium.github.io/awsh/) — Your terminal answers you -- type a question where a command would go.
+- [gawbbonet](https://aitherium.github.io/gawbbonet/) — GobboNet campaigns with a real agent brain — scoped memory, graph recall.
+
+## Where it lives
+
+- Repo: https://github.com/Aitherium/awpack
+- Docs: https://aitherium.github.io/awpack/
+- Manifest (keys + the one-line adoption story): https://aitherium.github.io/awpack/aither-manifest.json
+
+Everything Aitherium, in one file for agents: https://aitherium.com/llms.txt
