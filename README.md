@@ -25,8 +25,9 @@ cadence, and that is backwards in both directions:
 Packs and the runtime that loads them are different products with different
 audiences. `awdk` is the runtime. This is the shelf.
 
-A community marketplace is the layer *above* this: awpack is the first-party
-shelf, the marketplace is everyone else's.
+The community shelf is the layer *beside* this: awpack is the first-party
+shelf, [awpack-community](https://github.com/Aitherium/awpack-community) is
+everyone else's — same format, installed only with `--allow-community`.
 
 ## What a pack is
 
@@ -98,9 +99,10 @@ is `unlabelled` and behaves exactly as before; a label awpack cannot read is
 an error, never a guess.
 
 ```bash
-AWPACK_SHELF=~/community-packs awpack list           # Packs on shelf (community)
-AWPACK_SHELF=~/community-packs awpack install foo    # refused: read it first
-AWPACK_SHELF=~/community-packs awpack install foo --allow-community
+git clone https://github.com/Aitherium/awpack-community && export AWPACK_SHELF=awpack-community/packs
+awpack list                                          # Packs on shelf (community)
+awpack install hello-community                       # refused: read it first
+awpack install hello-community --allow-community
 ```
 
 ## What is here so far
