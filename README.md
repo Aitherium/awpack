@@ -81,6 +81,28 @@ awpack list                      # AWPACK_SHELF=<dir> points it at another shelf
 awpack install <id>
 ```
 
+## Provenance: first-party and community shelves
+
+A shelf says who stands behind it in a `shelf.yaml` at its root:
+
+```yaml
+provenance: first-party   # built and reviewed by Aitherium -- this shelf
+# provenance: community   # everyone else's packs
+```
+
+`awpack list`, `awpack show` and every `--json` answer carry the provenance.
+A **community** pack lists and shows like any other, but `awpack install`
+refuses it until you pass `--allow-community`: nobody here built or reviewed
+it, so you read it first and say so explicitly. A shelf with no `shelf.yaml`
+is `unlabelled` and behaves exactly as before; a label awpack cannot read is
+an error, never a guess.
+
+```bash
+AWPACK_SHELF=~/community-packs awpack list           # Packs on shelf (community)
+AWPACK_SHELF=~/community-packs awpack install foo    # refused: read it first
+AWPACK_SHELF=~/community-packs awpack install foo --allow-community
+```
+
 ## What is here so far
 
 | pack | status | what it is |

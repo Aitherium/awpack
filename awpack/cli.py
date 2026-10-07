@@ -40,6 +40,14 @@ from pathlib import Path
 
 VERBS = ("list", "show", "install", "verify", "remove")
 
+#: Who stands behind a shelf, declared in its `shelf.yaml`. A shelf with no
+#: shelf.yaml is `unlabelled` and behaves exactly as before (awnix points
+#: AWPACK_SHELF at an unlabelled copy of this shelf; that must keep working).
+#: `community` is everyone else's packs: listed and shown like any other, but
+#: never installed without an explicit --allow-community, because nobody here
+#: built or reviewed them.
+PROVENANCES = ("first-party", "community")
+
 try:
     import yaml
 except ImportError:
@@ -101,12 +109,29 @@ class PackRegistry:
         self.shelf = shelf_dir
         self.packs: dict = {}
         self.errors: list = []
+        self.provenance = "unlabelled"
 
     def discover(self) -> int:
         """Scan shelf for packs. Return count discovered, or 0 if shelf unreadable."""
         if not self.shelf.is_dir():
             self.errors.append(f"shelf {self.shelf} is not a directory")
             return 0
+        label = self.shelf / "shelf.yaml"
+        if label.is_file():
+            try:
+                declared = str(_load_manifest(label.read_text(encoding="utf-8"))
+                               .get("provenance") or "").strip()
+            except Exception as e:
+                self.errors.append(f"shelf.yaml unreadable: {e}")
+                return 0
+            if declared not in PROVENANCES:
+                # A label we cannot read is not "unlabelled": someone tried to say
+                # who stands behind this shelf, and guessing which would be worse.
+                self.errors.append(
+                    f"shelf.yaml provenance {declared!r} is not one of "
+                    f"{', '.join(PROVENANCES)}")
+                return 0
+            self.provenance = declared
         try:
             pack_dirs = sorted(p for p in self.shelf.iterdir() if p.is_dir())
         except (OSError, PermissionError) as e:
@@ -174,13 +199,15 @@ def cmd_list(registry: PackRegistry, as_json: bool = False) -> int:
                         "detail": f"no packs on the shelf {registry.shelf}"})
         return 2
     if as_json:
-        _emit(True, {"ok": True, "op": "list", "detail": "", "packs": [
+        _emit(True, {"ok": True, "op": "list", "detail": "",
+                     "provenance": registry.provenance, "packs": [
             {"id": pid, "version": str(m.get("version", "")),
              "status": str(m.get("status", "")),
-             "summary": str(m.get("summary", ""))}
+             "summary": str(m.get("summary", "")),
+             "provenance": registry.provenance}
             for pid, m in sorted(registry.packs.items())]})
         return 0
-    print("Packs on shelf:\n")
+    print(f"Packs on shelf ({registry.provenance}):\n")
     for pack_id, manifest in sorted(registry.packs.items()):
         version = manifest.get("version", "?")
         status = manifest.get("status", "?")
@@ -210,7 +237,7 @@ def cmd_show(registry: PackRegistry, pack_id: str) -> int:
         return 1
     d = manifest["_dir"]
     manifest_file = d / "pack.yaml"
-    print(f"Pack: {pack_id}\n")
+    print(f"Pack: {pack_id}  [{registry.provenance}]\n")
     print(manifest_file.read_text(encoding="utf-8"))
     return 0
 
@@ -332,7 +359,7 @@ def _refuse(as_json: bool, op: str, pack_id: str, dest: Path | None,
 
 def cmd_install(registry: PackRegistry, pack_id: str,
                 dest: str | Path | None = None, as_json: bool = False,
-                replace: bool = False) -> int:
+                replace: bool = False, allow_community: bool = False) -> int:
     """Install a pack to <install_root>/<id>.
 
     Steps:
@@ -351,6 +378,11 @@ def cmd_install(registry: PackRegistry, pack_id: str,
     if not manifest:
         return _refuse(as_json, "install", pack_id, agents_dir,
                        f"pack not found: {pack_id!r}", 1)
+    if registry.provenance == "community" and not allow_community:
+        return _refuse(as_json, "install", pack_id, agents_dir,
+                       f"{pack_id!r} is a COMMUNITY pack: nobody at Aitherium built or "
+                       f"reviewed it. Read {manifest['_dir']} first, then re-run with "
+                       f"--allow-community to install it.", 1)
 
     # Check runtime requirement
     runtime_req = manifest.get("runtime", "").strip()
@@ -411,6 +443,7 @@ def cmd_install(registry: PackRegistry, pack_id: str,
     install_cmd = manifest.get("install", "").strip()
     if as_json:
         _emit(True, {"ok": True, "op": "install", "id": pack_id,
+                     "provenance": registry.provenance,
                      "dest": str(install_dir),
                      "version": str(manifest.get("version", "")),
                      "next": install_cmd, "detail": ""})
@@ -691,8 +724,40 @@ def _self_test() -> int:
             rc = cmd_list(reg_real)
             assert rc == 0, f"a populated shelf must exit 0, got {rc}"
 
+        # Provenance. A community shelf lists normally, refuses install without
+        # --allow-community, installs with it; a garbled label is an error, not
+        # "unlabelled"; the shipped shelf says first-party.
+        comm = tmp / "community"
+        (comm / "cpack").mkdir(parents=True)
+        (comm / "shelf.yaml").write_text("provenance: community\n", encoding="utf-8")
+        (comm / "cpack" / "pack.yaml").write_text(
+            "id: cpack\nversion: 0.1.0\nsummary: someone else's\nstatus: preview\n",
+            encoding="utf-8")
+        reg_c = PackRegistry(comm)
+        reg_c.discover()
+        assert reg_c.provenance == "community", reg_c.provenance
+        assert cmd_list(reg_c) == 0, "a community shelf must still list"
+        cdest = tmp / "cdest"
+        rc = cmd_install(reg_c, "cpack", dest=cdest)
+        assert rc == 1 and not (cdest / "cpack").exists(), \
+            "a community pack installed WITHOUT --allow-community"
+        rc = cmd_install(reg_c, "cpack", dest=cdest, allow_community=True)
+        assert rc == 0 and (cdest / "cpack" / "pack.yaml").is_file(), \
+            f"--allow-community did not install the community pack (rc={rc})"
+        odd = tmp / "odd"
+        (odd / "x").mkdir(parents=True)
+        (odd / "shelf.yaml").write_text("provenance: trusted-by-me\n", encoding="utf-8")
+        reg_o = PackRegistry(odd)
+        reg_o.discover()
+        assert reg_o.errors and reg_o.provenance == "unlabelled", \
+            "an unknown provenance label was accepted"
+        assert PackRegistry(shelf).provenance == "unlabelled"
+        if real_shelf.is_dir() and (real_shelf / "shelf.yaml").is_file():
+            assert reg_real.provenance == "first-party", reg_real.provenance
+
         print("self-test: all commands work, refusals fire correctly, "
-              "and an empty shelf exits 2 rather than 0")
+              "an empty shelf exits 2 rather than 0, and a community pack never "
+              "installs without --allow-community")
         return 0
 
     except AssertionError as e:
@@ -728,13 +793,16 @@ def resolve_shelf(env: dict | None = None, here: Path | None = None) -> Path:
 def _parse(argv: list[str]) -> tuple[list[str], dict]:
     """Split argv into positionals and the flags this CLI knows."""
     pos: list[str] = []
-    opts: dict = {"json": False, "dest": None, "ref": None, "replace": False}
+    opts: dict = {"json": False, "dest": None, "ref": None, "replace": False,
+                  "allow_community": False}
     it = iter(argv)
     for a in it:
         if a == "--json":
             opts["json"] = True
         elif a == "--replace":
             opts["replace"] = True
+        elif a == "--allow-community":
+            opts["allow_community"] = True
         elif a in ("--dest", "--ref"):
             val = next(it, None)
             if val is None:
@@ -785,7 +853,8 @@ def main(argv: list[str] | None = None, shelf: Path | None = None) -> int:
         return cmd_show(registry, rest[0])
     if cmd == "install":
         return cmd_install(registry, rest[0], dest=dest, as_json=as_json,
-                           replace=opts["replace"])
+                           replace=opts["replace"],
+                           allow_community=opts["allow_community"])
     if cmd == "verify":
         return cmd_verify(registry, rest[0], dest=dest, as_json=as_json)
     return cmd_remove(registry, rest[0], dest=dest, as_json=as_json)

@@ -1,0 +1,4 @@
+# Who stands behind this shelf. awpack reads it: `first-party` packs are built
+# and reviewed by Aitherium; a `community` shelf needs --allow-community to
+# install from. See awpack/cli.py PROVENANCES.
+provenance: first-party
