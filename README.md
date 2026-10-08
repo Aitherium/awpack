@@ -62,6 +62,8 @@ licence: proprietary          # or a SPDX id — the SDK no longer decides this
 this pack and that tool is yours. One that binds to nothing is not a loud typo,
 it is a capability the pack advertises and the runtime silently cannot provide,
 so the agent behaves as though the feature is switched off.
+`tools/check_packs.py` enforces this (AWP005) wherever the runtime source is
+on disk: each name must be defined by the pack's own code or by the runtime.
 
 **`status: internal` needs a reason.** A pack that must never be published is a
 recorded decision, not an omission — write why in the README, or the next

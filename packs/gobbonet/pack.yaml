@@ -1,9 +1,9 @@
 id: gobbonet
-version: 0.1.0
+version: 0.2.0
 summary: >-
   Run GobboNet's chat on an agent loop, with campaign memory scoped by who
   knows what, and character-card / lorebook import-export.
-runtime: awdk>=3.7.4
+runtime: awdk>=3.8.63    # campaign_illustrate ships in the awdk release after 3.8.62
 # The command a reader actually types. Declared rather than inferred:
 # a pack runs INSIDE a runtime, so "how do I use it" has no answer a
 # generator could derive, and inventing one ships a command that does
@@ -19,5 +19,6 @@ tools:
   - campaign_import_card  # a GobboNet character card -> scoped notes
   - campaign_import_lorebook
   - campaign_export_card  # what the harness knows -> a card, without leaking
+  - campaign_illustrate   # a character / remembered scene -> images via curated Media Forge
 status: preview
 licence: proprietary

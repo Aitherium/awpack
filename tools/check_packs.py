@@ -17,6 +17,14 @@ Three rules, and each exists because the alternative fails SILENTLY:
           published is a recorded DECISION; without the reason the next
           person reads the absence as a backlog item and publishes it.
 
+  AWP005  a name in `tools:` that nothing in the pack's runtime source
+          defines. README: "every declared tool must exist" — a tool that binds
+          to nothing is a capability the pack advertises and the runtime
+          silently cannot provide. A tool may be defined by the pack's own
+          code or by the runtime it loads into, so this is judged only where
+          the runtime source is on disk: $AWPACK_RUNTIME_SRC, or the monorepo
+          sibling awdk/adk/. Elsewhere the rule says it did not run.
+
 Exits 2 — never 0 — when it could not judge (no packs directory, or a
 pack.yaml that will not parse). An empty shelf and a clean shelf must not
 look the same.
@@ -24,8 +32,11 @@ look the same.
 
 from __future__ import annotations
 
+import os
+import re
 import sys
 from pathlib import Path
+from typing import Optional
 
 try:
     import yaml
@@ -93,7 +104,36 @@ REQUIRED_IF_OFFERED = ("install", "runtime")
 VALID_STATUS = {"published", "preview", "internal"}
 
 
-def judge(packs_dir: Path) -> tuple:
+def runtime_src_root(packs_dir: Path) -> Optional[Path]:
+    """Where the packs' runtime source lives, if it is on this disk."""
+    env = os.environ.get("AWPACK_RUNTIME_SRC", "").strip()
+    if env:
+        return Path(env)
+    sibling = packs_dir.resolve().parents[1] / "awdk" / "adk"
+    return sibling if sibling.is_dir() else None
+
+
+_SOURCE_CACHE: dict = {}
+
+
+def _source_text(root: Path) -> str:
+    key = str(root.resolve())
+    if key not in _SOURCE_CACHE:
+        _SOURCE_CACHE[key] = "\n".join(
+            p.read_text(encoding="utf-8", errors="replace")
+            for p in sorted(root.rglob("*.py")))
+    return _SOURCE_CACHE[key]
+
+
+def unbound_tools(tools: list, *roots: Path) -> list:
+    """Declared tool names no `def <name>(` under any of `roots` defines."""
+    text = "\n".join(_source_text(r) for r in roots if r.is_dir())
+    return [t for t in tools
+            if not re.search(r"^\s*(?:async\s+)?def\s+" + re.escape(str(t)) + r"\s*\(",
+                             text, re.MULTILINE)]
+
+
+def judge(packs_dir: Path, runtime_src: Optional[Path] = None) -> tuple:
     """Return (findings, judged). Raises nothing: the caller decides the exit."""
     findings: list = []
     judged = 0
@@ -127,6 +167,13 @@ def judge(packs_dir: Path) -> tuple:
             findings.append(
                 f"AWP003 {d.name}: internal with no reason — a hole dressed "
                 f"up as a decision")
+        tools = data.get("tools") or []
+        if tools and runtime_src is not None:
+            for t in unbound_tools([str(x) for x in tools], d, runtime_src):
+                findings.append(
+                    f"AWP005 {d.name}: declares tool {t!r}, which neither the pack "
+                    f"nor the runtime ({runtime_src}) defines — a promise that binds "
+                    f"to nothing")
         if data.get("id") and data["id"] != d.name:
             findings.append(
                 f"AWP002 {d.name}: declares id {data['id']!r}, which is how it "
@@ -198,6 +245,28 @@ def self_test() -> int:
             encoding="utf-8")
         assert any("must match the directory" in f for f in judge(packs)[0]), \
             "an id/directory mismatch was not caught"
+        # AWP005: a declared tool with no definition fires; a defined one does not.
+        src = tmp / "src"
+        src.mkdir()
+        (good / "pack.yaml").write_text(
+            "id: good\nversion: 0.1.0\nsummary: a pack\nstatus: preview\n"
+            "runtime: awdk\ninstall: adk good\ntools:\n  - real_tool\n  - ghost_tool\n",
+            encoding="utf-8")
+        (src / "tools.py").write_text(
+            "def real_tool(x):\n    return x\n# ghost_tool is only named here\n",
+            encoding="utf-8")
+        f5 = [f for f in judge(packs, src)[0] if "AWP005" in f]
+        assert len(f5) == 1 and "ghost_tool" in f5[0], f5
+        # ...and with no runtime source the rule does not guess.
+        assert not [f for f in judge(packs)[0] if "AWP005" in f], \
+            "AWP005 judged a pack with no runtime source"
+        # A tool the pack's OWN code defines binds too (bead-space ships its tools).
+        _SOURCE_CACHE.clear()
+        (good / "pack_tools.py").write_text(
+            "class X:\n    async def ghost_tool(self):\n        pass\n", encoding="utf-8")
+        assert not [f for f in judge(packs, src)[0] if "AWP005" in f], \
+            "AWP005 fires on a tool the pack's own code defines"
+
         # Exercise the FALLBACK explicitly. Without this it is dead code on
         # every machine that has pyyaml — which is every dev machine, and none
         # of the runners where it is the only reader.
@@ -230,7 +299,11 @@ def main() -> int:
         print(f"check_packs: {packs} is not a directory — cannot judge",
               file=sys.stderr)
         return 2
-    findings, judged = judge(packs)
+    src = runtime_src_root(packs)
+    findings, judged = judge(packs, src)
+    if src is None:
+        print("check_packs: AWP005 not judged — no runtime source on disk "
+              "(set AWPACK_RUNTIME_SRC to awdk/adk)")
     if judged == 0 and not findings:
         print("check_packs: no packs found — refusing to call an empty shelf ok",
               file=sys.stderr)
