@@ -1,0 +1,16 @@
+id: ps5-bridge
+name: PS5 bridge — agents play relinked PS5 titles
+version: 0.1.0
+description: >-
+  Watch frames from, and drive the pad of, a PS5 title relinked by AnyPS5 and
+  started with APS5_AGENT_BRIDGE. Local socket only (127.0.0.1).
+category: tool_packs
+author: Aitherium
+tags: [games, ps5, anyps5, agents, training]
+mcp_tools:
+  - "ps5_*"
+# register() lives in this directory's __init__.py; the loader falls back to it
+# by file path when the pack is installed outside sys.path.
+tool_modules:
+  - ps5_bridge_pack
+entitlements: []

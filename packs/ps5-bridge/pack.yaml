@@ -1,0 +1,22 @@
+id: ps5-bridge
+version: 0.1.0
+summary: >-
+  Let an agent play a relinked PS5 title: watch its frames and hold buttons on
+  its pad through the AnyPS5 Aither bridge.
+runtime: awdk>=3.7.0
+install: |
+  pip install awdk
+  adk pack install ./awpack/packs/ps5-bridge
+  # then start the relinked title with APS5_AGENT_BRIDGE=47500
+needs: []
+extras: []
+tools:
+  - ps5_connect     # attach to a running title's bridge port
+  - ps5_frame       # wait for the next completed frame
+  - ps5_press       # hold buttons/sticks for N frames, then release
+  - ps5_fps         # measure frame rate from the title's own clock
+  - ps5_disconnect  # detach; the title releases the pad
+status: preview
+# Our client only. AnyPS5 itself (GPL-2.0-only) runs as a separate process and
+# is never shipped in this pack; the bridge is github.com/wizzense/AnyPS5 PR #1.
+licence: proprietary
