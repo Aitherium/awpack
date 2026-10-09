@@ -112,6 +112,7 @@ awpack install hello-community --allow-community
 | pack | status | what it is |
 |---|---|---|
 | `gobbonet` | preview | GobboNet's chat on an agent loop: campaign memory scoped by who knows what, plus character-card and lorebook import/export |
+| `ps5-bridge` | preview | An agent plays a PS5 game you own: watch frames and hold buttons on a title converted by AnyPS5 (bring your own dump) |
 
 The rest of the first-party packs still live inside the SDK and move here one
 at a time — a migration, not a bulk copy, because each one has to keep working
