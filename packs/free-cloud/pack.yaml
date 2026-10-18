@@ -1,0 +1,28 @@
+id: free-cloud
+version: 0.1.0
+summary: >-
+  Free cloud (your own free-tier keys): run FreeLLMAPI locally and make it
+  awdk's non-local route -- local model first, your free tiers next, paid API
+  last. Bring your own provider keys; their terms apply.
+runtime: awdk>=3.8.74    # adk free-cloud ships in 3.8.74
+# Every command here EXISTS (adk free-cloud, adk keys set). `up` is idempotent:
+# a running container is left alone, a stopped one is started, and the
+# encryption key is created once and never rotated. Remove: `awpack remove
+# free-cloud` then `adk free-cloud down` -- the container goes, the
+# freellmapi-data volume (your keys) stays.
+install: |
+  pip install "awdk>=3.8.74"
+  adk free-cloud up            # pinned FreeLLMAPI image on 127.0.0.1:3001 (docker or podman)
+  # open http://127.0.0.1:3001, add YOUR provider keys, copy the unified key
+  adk keys set freellmapi      # stays on this machine
+  adk free-cloud enable        # or: adk free-cloud enable --url http://host:3001
+  # Desktop app user? skip `up`: awdk finds it on :31415.
+needs: []
+extras: []
+tools: []
+# FreeLLMAPI itself (MIT, github.com/tashfeenahmed/freellmapi) runs as the
+# upstream's published image, pulled at a pinned digest; nothing of it is
+# vendored or shipped in this pack. Upstream: personal experimentation, not
+# production; per-provider terms review in its docs/en/architecture index.
+status: preview
+licence: proprietary

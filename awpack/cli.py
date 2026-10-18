@@ -57,7 +57,9 @@ except ImportError:
 def _load_manifest(text: str) -> dict:
     """Read a pack manifest. Uses pyyaml when present, else a small parser.
 
-    Covers: `key: value`, folded blocks (`key: >-`), simple lists (`- item`).
+    Covers: `key: value`, folded blocks (`key: >-`), literal blocks (`key: |`,
+    newlines kept -- an `install:` block is commands, one per line), simple lists
+    (`- item`) and inline lists (`[a, b]`).
     """
     if yaml is not None:
         return yaml.safe_load(text) or {}
@@ -72,12 +74,22 @@ def _load_manifest(text: str) -> dict:
             return
         if mode == "block":
             out[key] = " ".join(x.strip() for x in buf).strip()
+        elif mode == "literal":
+            lines = list(buf)
+            while lines and not lines[-1].strip():
+                lines.pop()
+            ind = min((len(x) - len(x.lstrip()) for x in lines if x.strip()), default=0)
+            out[key] = "\n".join(x[ind:] for x in lines)
         elif mode == "list":
             out[key] = list(buf)
         key, mode, buf = None, None, []
 
     for raw in text.splitlines():
         line = raw.rstrip()
+        # Inside a literal block a `#` line is CONTENT (a shell comment in `install:`)
+        if mode == "literal" and (not line.strip() or line[:1].isspace()):
+            buf.append(line)
+            continue
         if not line.strip() or line.lstrip().startswith("#"):
             continue
         indented = line[:1].isspace()
@@ -92,12 +104,21 @@ def _load_manifest(text: str) -> dict:
             continue
         k, _, v = line.partition(":")
         k, v = k.strip(), v.strip()
-        if v in (">-", ">", "|", "|-"):
+        if v in ("|", "|-"):
+            key, mode, buf = k, "literal", []
+        elif v in (">-", ">"):
             key, mode, buf = k, "block", []
         elif v == "":
             key, mode, buf = k, "list", []
         else:
-            out[k] = v.split(" #")[0].strip().strip("'\"")
+            val = v.split(" #")[0].strip()
+            if val.startswith("[") and val.endswith("]"):
+                # An inline list (`needs: []`, `extras: [memory]`). Read as the
+                # STRING "[]" it made every pack's `needs` an unmet dependency named
+                # "[]", so a pyyaml-less install could install nothing at all.
+                out[k] = [x.strip().strip("'\"") for x in val[1:-1].split(",") if x.strip()]
+            else:
+                out[k] = val.strip("'\"")
     flush()
     return out
 
@@ -594,6 +615,19 @@ def _self_test() -> int:
             "needs: []\n",
             encoding="utf-8",
         )
+
+        # The pyyaml-less parser reads inline lists as lists, not the string "[]"
+        global yaml
+        saved_yaml, yaml = yaml, None
+        try:
+            parsed = _load_manifest("needs: []\nextras: [memory, x]\ntools: []\n"
+                                    "install: |\n  pip install x\n  # then\n  run x\n"
+                                    "status: preview\n")
+        finally:
+            yaml = saved_yaml
+        assert parsed == {"needs": [], "extras": ["memory", "x"], "tools": [],
+                          "install": "pip install x\n# then\nrun x",
+                          "status": "preview"}, parsed
 
         # Test list
         registry = PackRegistry(shelf)
