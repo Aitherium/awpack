@@ -1,0 +1,48 @@
+id: zeroauthy
+version: 0.1.0
+summary: >-
+  Stand up zeroauthy — the Apache-2.0 Go identity provider from the OccupySaaS
+  community — from its published container image or its release binaries. This
+  pack installs and documents it; it never vendors or hosts it.
+runtime: awdk>=3.8.0
+# The command a reader actually types. Every line below is copied from
+# zeroauthy's own README at v1.0.0-rc.1. Nothing here is invented: the pack
+# points AT their repository instead of reimplementing their product, so their
+# release cadence stays theirs.
+install: |
+  # Source, docs and the compatibility matrix (Apache-2.0):
+  #   https://github.com/occupysaas/zeroauthy
+  git clone https://github.com/occupysaas/zeroauthy
+  cd zeroauthy
+
+  # Their quickstart (docs/quickstart.md) covers the TLS certificate pair and
+  # master.key that the server requires before it will start.
+  # Put cert.pem, key.pem and master.key where the run command below expects.
+
+  # Run the published image. Tag 1.0.0-rc.1 is the current public release.
+  docker run -d --name zeroauthy -p 8443:8443 -v zeroauthy-data:/data \
+    -v "$PWD/certs:/certs:ro" \
+    -e ZEROAUTHY_SERVER__LISTEN=:8443 \
+    -e ZEROAUTHY_SERVER__SYSTEM_HOST=system.localhost:8443 \
+    -e ZEROAUTHY_SERVER__TLS_CERT_FILE=/certs/cert.pem \
+    -e ZEROAUTHY_SERVER__TLS_KEY_FILE=/certs/key.pem \
+    -e ZEROAUTHY_SECURITY__MASTER_KEY="$(cat master.key)" \
+    ghcr.io/occupysaas/zeroauthy:1.0.0-rc.1
+
+  # First admin, then sign in at https://system.localhost:8443/
+  docker exec zeroauthy zeroauthy admin create --email you@example.com
+
+  # No Docker? Release binaries for linux/amd64, linux/arm64 and darwin/arm64
+  # are on their releases page, with a SHA256SUMS file.
+needs: []
+extras: []
+# No tools are declared on purpose. zeroauthy ships its own admin CLI and a
+# management API; wrapping them in MCP tools is a separate piece of work and
+# AWP005 exists so a pack cannot advertise a tool that binds to nothing.
+tools: []
+status: preview
+licence: Apache-2.0
+reason: >-
+  Third-party product from the OccupySaaS community. Upstream Apache-2.0; the
+  pack records how to run it and gives it a shelf entry, and grants no hosting
+  or trademark right (see AitherOS/config/orgs/occupysaas.yaml not_offered).

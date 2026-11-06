@@ -1,0 +1,34 @@
+id: awdesk
+version: 0.1.0
+summary: >-
+  Install the Aither desktop companion: a tray app with an avatar, decision
+  cards that pop when the agent needs you, and a browser bridge. Shipped as
+  release assets for Windows, macOS (arm64 and x64) and Linux.
+runtime: awdk>=3.8.0
+# Verified against Aitherium/awdesk release v0.1.28, which carries every asset
+# named below plus SHA256SUMS.txt.
+install: |
+  # Download the asset for your platform from
+  #   https://github.com/Aitherium/awdesk/releases
+  #
+  # v0.1.28 ships:
+  #   Desk-0.1.28-windows-x64-setup.exe
+  #   Desk-0.1.28-macos-arm64.dmg   (+ .zip)
+  #   Desk-0.1.28-macos-x64.dmg     (+ .zip)
+  #   Desk-0.1.28-linux-amd64.deb
+  #   Desk-0.1.28-linux-x86_64.AppImage
+  #
+  # Check the download against SHA256SUMS.txt in the same release.
+  #
+  # From source instead:
+  #   npm install && npx electron .
+needs: []
+extras: []
+# The desktop app is a client, not a tool surface; its capabilities live behind
+# the daemon it talks to.
+tools: []
+status: preview
+licence: see the repository — LICENSE is not SPDX-classified
+reason: >-
+  First-party Aitherium desktop client. It is the surface a person sees, not a
+  service, so it declares no tools.

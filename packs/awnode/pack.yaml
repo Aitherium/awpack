@@ -1,0 +1,36 @@
+id: awnode
+version: 0.1.0
+summary: >-
+  Run awnode on a machine you own: a lightweight local gateway that puts that
+  box's hardware and model backends behind one endpoint and exposes them as MCP
+  tools. Installs from PyPI and needs no account to start.
+runtime: awdk>=3.8.0
+# Every verb below comes from awnode's own PyPI description (0.3.6).
+install: |
+  pip install awnode
+
+  # Start the gateway against the backend you actually run:
+  awnode start                    # local, auto-detected
+  awnode start --local
+  awnode start --cloud
+  awnode start --vllm-url http://localhost:8120
+
+  awnode status
+
+  # Expose the read-only tool set to an IDE or an agent:
+  awnode mcp
+
+  # Bind it to a platform account only if you WANT the control plane.
+  # Without this it still serves locally.
+  #   awnode connect aither_sk_live_xxxxx
+needs: []
+extras: []
+# awnode serves MCP tools, but they are defined in its own package, not in awdk
+# or this shelf entry, so AWP005 cannot bind them here. Read them with
+# `awnode mcp` once it is running.
+tools: []
+status: preview
+licence: MIT
+reason: >-
+  First-party Aitherium brick, MIT. Serves the machine's own hardware; the
+  platform connection is opt-in.

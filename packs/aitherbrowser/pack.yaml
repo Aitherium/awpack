@@ -1,0 +1,73 @@
+id: aitherbrowser
+version: 0.1.0
+summary: >-
+  Run AitherBrowser on your own machine: an untethered Chromium an agent drives
+  with the pilot_* tools — sessions, screenshots, extraction, taught recipes and
+  saved logins that stay on your disk and never touch anyone else's hardware.
+runtime: awdk>=3.8.0
+# ── NOT YET INSTALLABLE BY A STRANGER. Read this before the commands. ─────────
+# Verified 2026-11-06. Three blockers, each with its evidence:
+#
+#  1. `adk addon enable aitherbrowser` raises "Unknown addon" on a pip-installed
+#     awdk. The manifest lives at AitherOS/config/addon_manifests/aitherbrowser.yaml,
+#     which is NOT mirrored into the wheel: awdk/adk/addon_manifests/ holds 16
+#     manifests and aitherbrowser is not one of them, and the loader's
+#     _find_manifest_dir() additionally requires a _schema.yaml sentinel that the
+#     mirror does not ship either. The command works in THIS repository's tree,
+#     where the monorepo-relative path resolves. It does not work from PyPI.
+#  2. The image `aitherium/aitheros-browser:latest` is not anonymously pullable
+#     (Docker Hub 404 / GHCR 401), and the addon manager has no login step.
+#  3. The pilot_* tools require the PROFESSIONAL+ entitlement
+#     `can_use_computer_use` (AitherOS/config/product_billing.yaml:602-606). They
+#     are not free, and the addon manager does not load a tool pack at all — so
+#     enabling the addon starts a container but registers no tools by itself.
+#
+# The commands below are correct WHERE THE MANIFEST RESOLVES (this repo, the
+# fleet). They are recorded so the gap is a known, dated fact rather than a
+# surprise on a stranger's machine.
+install: |
+  # Only inside a checkout of this repository, or where the addon manifest has
+  # been installed to ~/.aither/components. From PyPI alone this raises
+  # "Unknown addon: aitherbrowser".
+  pip install awdk
+
+  # Start the browser here (image aitherium/aitheros-browser, port 8132) and
+  # register what it finds:
+  adk addon enable aitherbrowser
+
+  # Confirm it is serving. The image answers TLS when configured and plain
+  # HTTP on a bare node, so probe the one you actually started.
+  curl -fsS http://127.0.0.1:8132/health
+
+  # Status, and the container's own log when something is wrong:
+  adk addon status aitherbrowser
+  adk addon logs aitherbrowser
+needs: []
+extras: []
+# These are DEFINED in the addon's tool pack (lib/agents/packs/aitherbrowser/
+# tools.py), which AWP005 resolves through config/addon_manifests/. Declaring
+# them is honest about existence — but note blocker 3 above: `adk addon enable`
+# starts the container and does NOT load this tool pack, so the functions exist
+# without being registered. They also require the PROFESSIONAL+ entitlement
+# can_use_computer_use.
+tools:
+  - pilot_open           # start a session at a URL, with a goal
+  - pilot_navigate       # move an existing session
+  - pilot_observe        # what the page currently shows
+  - pilot_parse_ui       # on-screen controls as structure (OmniParser set-of-marks)
+  - pilot_look           # ask a vision model about the rendered page
+  - pilot_click
+  - pilot_fill
+  - pilot_scroll
+  - pilot_extract        # structured entities out of the page
+  - pilot_save_login     # a login for a domain, scoped to the tenant
+  - pilot_done           # close a task, keeping what worked as a recipe
+  - pilot_close
+status: preview
+licence: proprietary
+reason: >-
+  First-party Aitherium addon, source-available under BUSL-1.1. The addon
+  manifest is requires_plan: free, but the PILOT TOOLS are not: pilot_* needs
+  the PROFESSIONAL+ entitlement can_use_computer_use and the CRM/HAR tools need
+  can_use_untether (AitherOS/config/product_billing.yaml:602-606). Self-hosting
+  the container is free; driving it with pilot_* is not.

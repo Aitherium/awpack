@@ -113,6 +113,37 @@ def runtime_src_root(packs_dir: Path) -> Optional[Path]:
     return sibling if sibling.is_dir() else None
 
 
+def addon_src_root(packs_dir: Path, pack_id: str) -> Optional[Path]:
+    """The addon's OWN tool sources, when this pack wraps an addon on this disk.
+
+    A shelf entry can wrap a first-party addon whose tools are registered by the
+    addon manager rather than defined in awdk — `adk addon enable <id>` loads
+    `lib/agents/packs/<pack_id>/`. Those functions are real and bound; they are
+    simply not in the runtime root AWP005 scanned. Without this third root the
+    rule reports every one of them as binding to nothing, which pressures an
+    honest pack into declaring `tools: []` and silently losing the declaration —
+    the exact failure AWP005 exists to prevent, arrived at from the other side.
+
+    Resolved from the manifest rather than guessed from the pack id, because
+    `pack_id` is the addon manager's own binding and may differ from the shelf
+    id. Absent manifest or absent tree returns None: the rule then behaves
+    exactly as before.
+    """
+    repo = packs_dir.resolve().parents[1]
+    manifest = repo / "AitherOS" / "config" / "addon_manifests" / f"{pack_id}.yaml"
+    if not manifest.is_file():
+        return None
+    try:
+        data = _load_manifest(manifest.read_text(encoding="utf-8"))
+    except Exception:  # noqa: BLE001 - an unreadable manifest is not a finding
+        return None
+    pid = str(data.get("pack_id") or "").strip()
+    if not pid:
+        return None
+    root = repo / "AitherOS" / "lib" / "agents" / "packs" / pid
+    return root if root.is_dir() else None
+
+
 _SOURCE_CACHE: dict = {}
 
 
@@ -169,7 +200,11 @@ def judge(packs_dir: Path, runtime_src: Optional[Path] = None) -> tuple:
                 f"up as a decision")
         tools = data.get("tools") or []
         if tools and runtime_src is not None:
-            for t in unbound_tools([str(x) for x in tools], d, runtime_src):
+            roots = [d, runtime_src]
+            addon = addon_src_root(packs_dir, str(data.get("id") or d.name))
+            if addon is not None:
+                roots.append(addon)
+            for t in unbound_tools([str(x) for x in tools], *roots):
                 findings.append(
                     f"AWP005 {d.name}: declares tool {t!r}, which neither the pack "
                     f"nor the runtime ({runtime_src}) defines — a promise that binds "
@@ -266,6 +301,39 @@ def self_test() -> int:
             "class X:\n    async def ghost_tool(self):\n        pass\n", encoding="utf-8")
         assert not [f for f in judge(packs, src)[0] if "AWP005" in f], \
             "AWP005 fires on a tool the pack's own code defines"
+
+        # AWP005 must see an addon's OWN tools, not only awdk's and the pack's.
+        # `adk addon enable <id>` loads lib/agents/packs/<pack_id>/, so a shelf
+        # entry wrapping an addon declares real tools that the runtime scan
+        # cannot reach — the blind spot that pushed aitherbrowser into `tools: []`.
+        _SOURCE_CACHE.clear()
+        repo = tmp / "repo"
+        (repo / "awpack").mkdir(parents=True)
+        apacks = repo / "awpack" / "packs"
+        awrapped = apacks / "wrapped"
+        awrapped.mkdir(parents=True)
+        (awrapped / "pack.yaml").write_text(
+            "id: wrapped\nversion: 0.1.0\nsummary: s\nstatus: preview\n"
+            "runtime: awdk\ninstall: adk wrapped\ntools:\n  - pilot_thing\n",
+            encoding="utf-8")
+        amanifests = repo / "AitherOS" / "config" / "addon_manifests"
+        amanifests.mkdir(parents=True)
+        (amanifests / "wrapped.yaml").write_text(
+            "id: wrapped\npack_id: wrappedtools\n", encoding="utf-8")
+        atools = repo / "AitherOS" / "lib" / "agents" / "packs" / "wrappedtools"
+        atools.mkdir(parents=True)
+        (atools / "tools.py").write_text(
+            "async def pilot_thing(session_id):\n    return session_id\n",
+            encoding="utf-8")
+        _SOURCE_CACHE.clear()
+        assert not [f for f in judge(apacks, src)[0] if "AWP005" in f], \
+            "AWP005 ignores the addon's own tool sources"
+        # ...and with the addon tree gone it fires again, so what changed is
+        # the root that is scanned and not the rule itself.
+        shutil.rmtree(atools)
+        _SOURCE_CACHE.clear()
+        assert any("pilot_thing" in f for f in judge(apacks, src)[0]), \
+            "AWP005 stopped firing once the addon tree was absent"
 
         # Exercise the FALLBACK explicitly. Without this it is dead code on
         # every machine that has pyyaml — which is every dev machine, and none

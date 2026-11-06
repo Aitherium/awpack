@@ -1,0 +1,32 @@
+id: awconnect
+version: 0.1.0
+summary: >-
+  Add the awconnect browser extension: it hands an agent the page you are looking
+  at, pairs over loopback to a local daemon, and falls back to the cloud only
+  when no daemon answers.
+runtime: awdk>=3.8.0
+# Verified 2026-11-06: the Chrome Web Store listing answers 200; the extension
+# manifest is 3.9.0 ("awconnect — AI Chat & Knowledge Assistant"); the source is
+# MIT and public at github.com/Aitherium/AitherConnect — note the repo name, the
+# tree here is `awconnect/` and the public mirror is `AitherConnect`.
+install: |
+  # Chrome Web Store:
+  #   https://chromewebstore.google.com/detail/awconnect/peeojgjhjficedkncdejbfnacooodbak
+  #
+  # Source (MIT): https://github.com/Aitherium/AitherConnect
+  # Load unpacked from a checkout of `awconnect/` if you want your own build.
+  #
+  # Start a local daemon BEFORE expecting it to pair — `awnode mcp`, or the awsh
+  # harness on :8362. With no daemon listening it reports
+  #   "No awdk daemon answered ...; using Cloud"
+  # and the page goes through the cloud instead of your machine. That fallback
+  # is deliberate; it is also the thing to check first when it "feels remote".
+needs: []
+extras: []
+tools: []
+status: preview
+licence: MIT
+reason: >-
+  Distribution is the browser extension itself. It is a client surface, not a
+  service, so it declares no tools; the capabilities behind it belong to the
+  daemon it pairs with.

@@ -1,0 +1,60 @@
+id: salescompel
+version: 0.1.0
+summary: >-
+  Run SalesCompel — the Apache-2.0, work-in-progress Salesforce replacement from
+  the OccupySaaS community — from source: a Go/PostgreSQL candidate with a Vue
+  record workflow, OAuth with PKCE, and a compatibility laboratory. This pack
+  records how to build and serve it; it never vendors or hosts it.
+runtime: awdk>=3.8.0
+# Every command below exists in the repo at the ref named. There is no published
+# container image and no release tag — the project is Apache-2.0 source only — so
+# building from source is the honest path, and the pack says so rather than
+# pointing at a `docker pull` that would 404.
+install: |
+  # Source (Apache-2.0): https://github.com/occupysaas/salescompel
+  git clone https://github.com/occupysaas/salescompel
+  cd salescompel
+
+  # It needs PostgreSQL, and NOTHING UPSTREAM CREATES THE LOGINS OR THE GRANTS —
+  # the role names below are examples you choose, not names the project defines.
+  # The one rule the program enforces: migrations run as an OPERATOR principal
+  # and serve runs as a RUNTIME principal that does not own the database
+  # (serve refuses owner privileges). Grant the runtime logins what the schema
+  # needs; the repository's docs are the authority on which privileges.
+  createdb salescompel
+  psql -d salescompel -c "CREATE ROLE salescompel_op  LOGIN PASSWORD 'change-me';"
+  psql -d salescompel -c "CREATE ROLE salescompel_app LOGIN PASSWORD 'change-me';"
+  psql -d salescompel -c "CREATE ROLE salescompel_id  LOGIN PASSWORD 'change-me';"
+
+  export MIGRATION_DATABASE_URL='postgres://salescompel_op@127.0.0.1:5432/salescompel?sslmode=disable'
+  export DATABASE_URL='postgres://salescompel_app@127.0.0.1:5432/salescompel?sslmode=disable'
+  export AUTH_DATABASE_URL='postgres://salescompel_id@127.0.0.1:5432/salescompel?sslmode=disable'
+
+  # Build, migrate, create the first user, then serve.
+  go build -o salescompel ./cmd/salescompel
+  ./salescompel migrate status    # forward-only migrations; never run at startup
+  ./salescompel migrate up
+  SALESCOMPEL_TENANT=acme SALESCOMPEL_USERNAME=admin@example.com \
+    SALESCOMPEL_PASSWORD='<choose-one>' SALESCOMPEL_ROLE=owner \
+    ./salescompel user create     # reads the four env vars above
+  ./salescompel serve -addr 127.0.0.1:8080
+
+  # The UI is BUILT assets, not source: -assets defaults to web/dist. Build them
+  # once with Node 22.12 or newer, or pass -assets "" to serve the API alone.
+  #   (cd web && npm ci && npm run build)
+  #
+  # A non-loopback listener is REFUSED without TLS. That is deliberate:
+  #   ./salescompel serve -addr 0.0.0.0:8443 -tls-cert cert.pem -tls-key key.pem
+needs: []
+extras: []
+# Nothing is declared on purpose: SalesCompel ships a Go CLI and a REST surface,
+# not MCP tools. AWP005 exists so a pack cannot advertise a tool that binds to
+# nothing, and wrapping its REST API is separate work that has not been done.
+tools: []
+status: preview
+licence: Apache-2.0
+reason: >-
+  Third-party product from the OccupySaaS community, Apache-2.0. The pack records
+  provenance, the build and the two-principal database split. It grants no
+  hosting or trademark right — see AitherOS/config/orgs/occupysaas.yaml
+  not_offered.
