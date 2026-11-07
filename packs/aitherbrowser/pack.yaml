@@ -31,7 +31,7 @@ install: |
   # "Unknown addon: aitherbrowser".
   pip install awdk
 
-  # Start the browser here (image aitherium/aitheros-browser, port 8132) and
+  # Start the browser here (port 8132) and
   # register what it finds:
   adk addon enable aitherbrowser
 
