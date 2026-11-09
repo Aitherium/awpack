@@ -3,10 +3,12 @@
 
 CONTRACT:
   awpack list [--json]                        list packs on the shelf
+  awpack search <query> [--json]              packs whose id/summary/tools match
   awpack show <id>                            render manifest for a human
   awpack install <id> [--dest DIR] [--replace] [--json]
                                               resolve deps, check runtime, install
-  awpack verify <id> [--dest DIR] [--json]    is the pack installed and loadable?
+  awpack verify <id> [--dest DIR] [--json]    is the pack installed, loadable and
+                                              byte-identical to what install wrote?
   awpack remove <id> [--dest DIR] [--json]    uninstall a pack from the install dir
   awpack --self-test                          prove every rule can still fail
   awpack --list-verbs                         one verb per line
@@ -38,7 +40,28 @@ import sys
 import tempfile
 from pathlib import Path
 
-VERBS = ("list", "show", "install", "verify", "remove")
+VERBS = ("list", "search", "show", "install", "verify", "remove")
+
+#: Written into every installed pack: where it came from and the sha256 of its
+#: content at install time. `verify` recomputes the hash, so an installed pack
+#: edited (or swapped) after install no longer verifies.
+INSTALL_RECORD = ".awpack-install.json"
+
+
+def tree_sha256(root: Path) -> str:
+    """sha256 over every file under *root* (sorted relative paths + bytes).
+
+    The install record itself is excluded, so the hash names the pack content.
+    """
+    import hashlib
+    h = hashlib.sha256()
+    files = sorted(p for p in root.rglob("*") if p.is_file() and p.name != INSTALL_RECORD)
+    for f in files:
+        rel = f.relative_to(root).as_posix()
+        h.update(rel.encode("utf-8") + b"\x00")
+        h.update(f.read_bytes())
+        h.update(b"\x00")
+    return h.hexdigest()
 
 #: Who stands behind a shelf, declared in its `shelf.yaml`. A shelf with no
 #: shelf.yaml is `unlabelled` and behaves exactly as before (awnix points
@@ -234,6 +257,42 @@ def cmd_list(registry: PackRegistry, as_json: bool = False) -> int:
         status = manifest.get("status", "?")
         summary = manifest.get("summary", "")[:60]
         print(f"  {pack_id:<20} {version:<10} {status:<12} {summary}")
+    return 0
+
+
+def _matches(pack_id: str, manifest: dict, q: str) -> bool:
+    tools = manifest.get("tools") or []
+    if isinstance(tools, str):
+        tools = [tools]
+    hay = [pack_id, str(manifest.get("summary", "")), *(str(t) for t in tools)]
+    return any(q in h.lower() for h in hay)
+
+
+def cmd_search(registry: PackRegistry, query: str, as_json: bool = False) -> int:
+    """Packs on the shelf whose id, summary or declared tools contain *query*.
+
+    0 with matches or none (an empty result is an answer); 2 when the shelf
+    cannot be read -- "nothing matched" and "I saw nothing" must not agree.
+    """
+    q = (query or "").strip().lower()
+    if registry.errors or not registry.packs:
+        detail = "; ".join(registry.errors) or f"no packs on the shelf {registry.shelf}"
+        print(detail, file=sys.stderr)
+        _emit(as_json, {"ok": False, "op": "search", "packs": [], "detail": detail})
+        return 2
+    hits = [(pid, m) for pid, m in sorted(registry.packs.items()) if _matches(pid, m, q)]
+    if as_json:
+        _emit(True, {"ok": True, "op": "search", "query": query, "detail": "",
+                     "provenance": registry.provenance, "packs": [
+            {"id": pid, "version": str(m.get("version", "")),
+             "status": str(m.get("status", "")), "summary": str(m.get("summary", "")),
+             "provenance": registry.provenance} for pid, m in hits]})
+        return 0
+    if not hits:
+        print(f"no packs matching {query!r}")
+        return 0
+    for pid, m in hits:
+        print(f"  {pid:<20} {m.get('version', '?'):<10} {str(m.get('summary', ''))[:60]}")
     return 0
 
 
@@ -440,6 +499,12 @@ def cmd_install(registry: PackRegistry, pack_id: str,
         if tmp_dir.exists():
             shutil.rmtree(tmp_dir)
         shutil.copytree(manifest["_dir"], tmp_dir)
+        (tmp_dir / INSTALL_RECORD).unlink(missing_ok=True)  # never trust a shipped one
+        content_sha = tree_sha256(tmp_dir)
+        (tmp_dir / INSTALL_RECORD).write_text(json.dumps({
+            "id": pack_id, "version": str(manifest.get("version", "")),
+            "provenance": registry.provenance, "source": f"shelf:{registry.shelf}",
+            "sha256": content_sha}, indent=2, sort_keys=True), encoding="utf-8")
         if install_dir.exists():
             if old_dir.exists():
                 shutil.rmtree(old_dir)
@@ -467,6 +532,7 @@ def cmd_install(registry: PackRegistry, pack_id: str,
                      "provenance": registry.provenance,
                      "dest": str(install_dir),
                      "version": str(manifest.get("version", "")),
+                     "sha256": content_sha,
                      "next": install_cmd, "detail": ""})
         return 0
     # Print the install command from manifest (user must run it)
@@ -555,9 +621,25 @@ def cmd_verify(registry: PackRegistry, pack_id: str,
                        f"installed pack id mismatch: expected {pack_id!r}, "
                        f"got {installed.get('id')!r}", 1)
 
+    # Content hash: a pack installed before records existed has none and is judged
+    # as before (sha256 ""); one WITH a record must still match it byte for byte.
+    content_sha = ""
+    record_file = install_dir / INSTALL_RECORD
+    if record_file.is_file():
+        try:
+            recorded = str(json.loads(record_file.read_text(encoding="utf-8")).get("sha256", ""))
+        except (OSError, ValueError) as e:
+            return _refuse(as_json, "verify", pack_id, agents_dir,
+                           f"install record unreadable: {e}", 1)
+        content_sha = tree_sha256(install_dir)
+        if recorded != content_sha:
+            return _refuse(as_json, "verify", pack_id, agents_dir,
+                           f"pack {pack_id!r} changed since install: sha256 "
+                           f"{content_sha[:16]}... != recorded {recorded[:16]}...", 1)
+
     if as_json:
         _emit(True, {"ok": True, "op": "verify", "id": pack_id,
-                     "dest": str(install_dir),
+                     "dest": str(install_dir), "sha256": content_sha,
                      "version": str(installed.get("version", "")), "detail": ""})
         return 0
     print(f"pack {pack_id!r} is installed and loadable")
@@ -866,7 +948,7 @@ def main(argv: list[str] | None = None, shelf: Path | None = None) -> int:
         print(str(e), file=sys.stderr)
         return 1
     if not pos:
-        print("usage: awpack {list,show,install,verify,remove} [id] "
+        print("usage: awpack {list,search,show,install,verify,remove} [id] "
               "[--dest DIR] [--json]", file=sys.stderr)
         return 1
 
@@ -880,6 +962,8 @@ def main(argv: list[str] | None = None, shelf: Path | None = None) -> int:
     if cmd not in VERBS:
         print(f"unknown command: {cmd!r}", file=sys.stderr)
         return 1
+    if cmd == "search":
+        return cmd_search(registry, " ".join(rest), as_json=as_json)
     if not rest:
         print(f"usage: awpack {cmd} <pack-id>", file=sys.stderr)
         return 1
