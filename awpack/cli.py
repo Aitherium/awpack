@@ -40,7 +40,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-VERBS = ("list", "search", "show", "install", "verify", "remove")
+VERBS = ("list", "search", "show", "install", "verify", "remove", "apply")
 
 #: Written into every installed pack: where it came from and the sha256 of its
 #: content at install time. `verify` recomputes the hash, so an installed pack
@@ -296,6 +296,46 @@ def cmd_search(registry: PackRegistry, query: str, as_json: bool = False) -> int
     return 0
 
 
+def _repo_roots() -> list[Path]:
+    """Likely AitherOS repo roots (where `lib/packs/manifest.py` lives).
+
+    awpack may run from an installed wheel (no repo) or from a checkout. These
+    are only CANDIDATES; the caller checks for the loader file before use.
+    """
+    here = Path(__file__).resolve()
+    roots = [Path.cwd(), Path.cwd() / "AitherOS"]
+    roots.extend([here.parents[i] for i in range(1, 4)])
+    roots.extend([here.parents[i] / "AitherOS" for i in range(1, 4)])
+    return roots
+
+
+def _load_pack_manifest():
+    """Import ``lib.packs.manifest`` from a repo checkout, or None."""
+    for root in _repo_roots():
+        try:
+            if (root / "lib" / "packs" / "manifest.py").is_file():
+                if str(root) not in sys.path:
+                    sys.path.insert(0, str(root))
+                break
+        except OSError:
+            continue
+    try:
+        from lib.packs import manifest as pack_manifest
+    except Exception:  # noqa: BLE001 - no repo checkout = no v2 loader
+        return None
+    return pack_manifest
+
+
+def _v2_show(pack_id: str) -> int | None:
+    """Render the v2 view when the id is not on this shelf. None = no loader."""
+    pack_manifest = _load_pack_manifest()
+    if pack_manifest is None:
+        return None
+    if not pack_manifest.get(pack_id):
+        return None
+    return pack_manifest.show(pack_id)
+
+
 def cmd_show(registry: PackRegistry, pack_id: str) -> int:
     """Show one pack's manifest."""
     if registry.errors:
@@ -308,11 +348,20 @@ def cmd_show(registry: PackRegistry, pack_id: str) -> int:
         # as "that pack is not a thing" when the truth is "I can see nothing
         # at all". cmd_list already calls this 2; these two must agree, or the
         # exit code means something different depending on which you called.
+        v2 = _v2_show(pack_id)
+        if v2 is not None:
+            return v2
         print("no packs on the shelf -- cannot say whether "
               f"{pack_id!r} exists", file=sys.stderr)
         return 2
     manifest = registry.get(pack_id)
     if not manifest:
+        # Not on this shelf: fall through to the ONE v2 loader, which reads
+        # every legacy shape in an AitherOS checkout (toolpacks, Library,
+        # app manifests, collections).
+        v2 = _v2_show(pack_id)
+        if v2 is not None:
+            return v2
         print(f"pack not found: {pack_id!r}", file=sys.stderr)
         return 1
     d = manifest["_dir"]
@@ -320,6 +369,22 @@ def cmd_show(registry: PackRegistry, pack_id: str) -> int:
     print(f"Pack: {pack_id}  [{registry.provenance}]\n")
     print(manifest_file.read_text(encoding="utf-8"))
     return 0
+
+
+def cmd_apply(collection: str, *, dry_run: bool, as_json: bool) -> int:
+    """Resolve a logical collection. Phase 1 is DRY-RUN ONLY."""
+    pack_manifest = _load_pack_manifest()
+    if pack_manifest is None:
+        print("awpack apply needs an AitherOS checkout (lib/packs/manifest.py); "
+              "run it from the repo, or use the `adk pack apply` equivalent.",
+              file=sys.stderr)
+        return 2
+    if not dry_run:
+        # A missing required flag is a usage error (2), not a failed apply (1).
+        print("usage: awpack apply <collection> --dry-run  "
+              "(dry-run only in this phase)", file=sys.stderr)
+        return 2
+    return pack_manifest.apply_dry_run(collection, dry_run=True, as_json=as_json)
 
 
 def _parse_version_req(req: str) -> tuple[str, str]:
@@ -910,11 +975,13 @@ def _parse(argv: list[str]) -> tuple[list[str], dict]:
     """Split argv into positionals and the flags this CLI knows."""
     pos: list[str] = []
     opts: dict = {"json": False, "dest": None, "ref": None, "replace": False,
-                  "allow_community": False}
+                  "allow_community": False, "dry_run": False}
     it = iter(argv)
     for a in it:
         if a == "--json":
             opts["json"] = True
+        elif a == "--dry-run" or a == "-n":
+            opts["dry_run"] = True
         elif a == "--replace":
             opts["replace"] = True
         elif a == "--allow-community":
@@ -964,6 +1031,11 @@ def main(argv: list[str] | None = None, shelf: Path | None = None) -> int:
         return 1
     if cmd == "search":
         return cmd_search(registry, " ".join(rest), as_json=as_json)
+    if cmd == "apply":
+        if not rest:
+            print("usage: awpack apply <collection> --dry-run", file=sys.stderr)
+            return 1
+        return cmd_apply(rest[0], dry_run=opts["dry_run"], as_json=as_json)
     if not rest:
         print(f"usage: awpack {cmd} <pack-id>", file=sys.stderr)
         return 1
