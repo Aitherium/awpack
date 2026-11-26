@@ -4,7 +4,7 @@
 
 **[Docs](https://aitherium.github.io/awpack/)**  ·  [Source](https://github.com/Aitherium/awpack)  ·  `git clone https://github.com/Aitherium/awpack`  ·  [The Aither World](https://aitherium.github.io/)
 
-> **The Aither World** is an operating system for agents — a Linux you can hand to one, the runtimes it works in, and the tools it works with. [awnix](https://github.com/Aitherium/awnix) is the Linux underneath it; **awpack** is one of its 72 bricks — each installs on its own, runs offline, and needs no account. 6 more are in development and 19 are planned.
+> **The Aither World** is an operating system for agents — a Linux you can hand to one, the runtimes it works in, and the tools it works with. [awnix](https://github.com/Aitherium/awnix) is the Linux underneath it; **awpack** is one of its 72 bricks — each installs on its own, runs offline, and needs no account. 6 more are in development and 23 are planned.
 >
 > **Start here:** Install one pack and run it. Each carries its own manifest, licence and version, so taking one costs you nothing else.
 
@@ -109,10 +109,23 @@ awpack install hello-community --allow-community
 
 ## What is here so far
 
-| pack | status | what it is |
-|---|---|---|
-| `gobbonet` | preview | GobboNet's chat on an agent loop: campaign memory scoped by who knows what, plus character-card and lorebook import/export |
-| `ps5-bridge` | preview | An agent plays a PS5 game you own: watch frames and hold buttons on a title converted by AnyPS5 (bring your own dump) |
+13 packs currently ship on this shelf (`awpack list` / `python tools/check_packs.py`):
+
+| pack | status | licence | what it is |
+|---|---|---|---|
+| `aitherbrowser` | preview | proprietary | Untethered Chromium driven with `pilot_*` tools — sessions, screenshots, extraction, taught recipes and saved logins on your disk (see pack README for prerequisites) |
+| `awconnect` | preview | MIT | Browser extension that hands an agent the page you are looking at, pairing over loopback to a local daemon |
+| `awdesk` | preview | repo `LICENSE` | Aither desktop companion: tray app with an avatar, decision cards, and a browser bridge |
+| `awnode` | preview | MIT | Lightweight local gateway putting a machine's hardware and model backends behind one endpoint and MCP tools |
+| `bead-space` | preview | proprietary | BeadSpace for agents: read the platform's work universe and add, update, and link beads |
+| `deep-research` | preview | proprietary | Multi-engine keyless web research and cited report writing (`dr_*` tools: sweeps, extraction, findings graph, Markdown/PDF/DOCX reports) |
+| `dgg-research` | preview | proprietary | Documentary-record research agent: resolve people to actors, quote verbatim before interpreting, and record corpus-scoped nulls |
+| `free-cloud` | preview | proprietary | Run FreeLLMAPI locally as `awdk`'s non-local route — local model first, your own free-tier keys next, paid API last |
+| `gobbonet` | preview | proprietary | GobboNet's chat on an agent loop: campaign memory scoped by who knows what, plus character-card and lorebook import/export |
+| `persona` | preview | proprietary | Desktop avatar bridge for Persona: control a VRM avatar's state, animation, voice, and audio over HTTP loopback |
+| `ps5-bridge` | preview | proprietary | Let an agent play a relinked PS5 title you own: watch frames and hold buttons through the AnyPS5 Aither bridge (bring your own dump) |
+| `salescompel` | preview | Apache-2.0 | Build and run SalesCompel (OccupySaaS Go/PostgreSQL CRM candidate) from source; records how to run it without vendoring or hosting |
+| `zeroauthy` | preview | Apache-2.0 | Stand up zeroauthy (OccupySaaS Go identity provider) from its published container image or release binaries |
 
 The rest of the first-party packs still live inside the SDK and move here one
 at a time — a migration, not a bulk copy, because each one has to keep working
@@ -188,7 +201,7 @@ Each installs on its own, works offline, and needs no account.
 | [awsettings](https://github.com/Aitherium/awsettings) | that you will remember to re-approve the same thing on every box you work from | one profile, unioned rather than overwritten, with the credentials left behind |
 | [awavatar](https://github.com/Aitherium/awavatar) | a cloud 3D vendor's opaque task id | a manifest with a sha256, a licence and a rig-audit verdict per file |
 
-[**awnix**](https://github.com/Aitherium/awnix) is the ground floor — A Linux you can hand to an agent — immutable base, capabilities included.
+[**awnix**](https://github.com/Aitherium/awnix) is the ground floor — A Linux you can hand to an agent — immutable x86_64 & ARM64 (aarch64) base, capabilities included.
 
 ## The Aitherium ecosystem
 
@@ -222,7 +235,7 @@ Every repository here is public. Each publishes an `aither-manifest.json` beside
 | [awnest](https://github.com/Aitherium/awnest) | Prove there is a human before you let them into the nest | [docs](https://aitherium.github.io/awnest/) |
 | [awrena](https://github.com/Aitherium/awrena) | Put two agents head to head and get a verdict you can check | [docs](https://aitherium.github.io/awrena/) |
 | [awnboard](https://github.com/Aitherium/awnboard) | A front gate you can put in front of anything, and hand someone the key to | [docs](https://aitherium.github.io/awnboard/) |
-| [awnix](https://github.com/Aitherium/awnix) | A Linux you can hand to an agent — immutable base, capabilities included | [docs](https://aitherium.github.io/awnix/) |
+| [awnix](https://github.com/Aitherium/awnix) | A Linux you can hand to an agent — immutable x86_64 & ARM64 (aarch64) base, capabilities included | [docs](https://aitherium.github.io/awnix/) |
 | [awrecover](https://github.com/Aitherium/awrecover) | Labelled snapshots with an all-or-nothing restore | [docs](https://aitherium.github.io/awrecover/) |
 | [awstorage](https://github.com/Aitherium/awstorage) | Every drive on every node, indexed, classified and diffed -- so you can see what you own before you delete it | [docs](https://aitherium.github.io/awstorage/) |
 | [awrelay](https://github.com/Aitherium/awrelay) | Portable agent messaging — findings, alerts, coordination | [docs](https://aitherium.github.io/awrelay/) |
